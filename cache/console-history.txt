@@ -1,0 +1,5 @@
+clear
+await c.verify("0xd313402c30375d06bf9b209c04a4170982a004d8")
+ const c = await ethers.getContractAt("CertificationRegistry", "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+await c.verify("0xd313402c30375d06bf9b209c04a4170982a004d8")
+clear

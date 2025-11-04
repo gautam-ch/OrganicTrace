@@ -8,6 +8,8 @@
     "hardhat:compile": "hardhat compile",
     "hardhat:deploy:local": "hardhat run scripts/deploy.ts --network localhost",
     "hardhat:deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+  "hardhat:add-certifier:local": "hardhat run scripts/add-certifier.ts --network localhost",
+  "hardhat:add-certifier:sepolia": "hardhat run scripts/add-certifier.ts --network sepolia",
     "hardhat:node": "hardhat node",
     "hardhat:test": "hardhat test",
     "hardhat:verify": "hardhat verify",

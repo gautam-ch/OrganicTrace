@@ -31,6 +31,7 @@ export async function updateSession(request: NextRequest) {
 
   if (
     request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/certifier-dashboard") ||
     request.nextUrl.pathname.startsWith("/product/create") ||
     request.nextUrl.pathname.startsWith("/product/transfer")
   ) {
