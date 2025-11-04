@@ -18,8 +18,13 @@ export default function FarmerDashboard({ user, profile }) {
         // Fetch farmer's products
         const { data: productsData } = await supabase.from("products").select("*").eq("farmer_id", user.id)
 
-        // Fetch farmer's certifications
-        const { data: certsData } = await supabase.from("certifications").select("*").eq("user_id", user.id)
+        // Fetch farmer's approved certification requests
+        const { data: certsData } = await supabase
+          .from("certification_requests")
+          .select("*")
+          .eq("farmer_id", user.id)
+          .eq("status", "approved")
+          .order("updated_at", { ascending: false })
 
         setProducts(productsData || [])
         setCertifications(certsData || [])
@@ -69,8 +74,8 @@ export default function FarmerDashboard({ user, profile }) {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">Organic Certifications</h2>
-          <Link href="/dashboard/add-certification">
-            <Button className="bg-primary hover:bg-primary/90">+ Add Certification</Button>
+          <Link href="/dashboard/request-certification">
+            <Button className="bg-primary hover:bg-primary/90">+ Request Certification</Button>
           </Link>
         </div>
 
@@ -82,19 +87,35 @@ export default function FarmerDashboard({ user, profile }) {
           <div className="grid md:grid-cols-2 gap-6">
             {certifications.map((cert) => (
               <Card key={cert.id} className="p-6 border border-border">
-                <h3 className="font-semibold mb-2">{cert.certification_type}</h3>
+                <h3 className="font-semibold mb-2">{cert.certification_body || "Organic Certification"}</h3>
                 <div className="space-y-2 text-sm">
                   <p>
-                    <span className="text-muted-foreground">Cert #:</span> {cert.certification_number}
+                    <span className="text-muted-foreground">Status:</span> Approved
                   </p>
-                  <p>
-                    <span className="text-muted-foreground">Issuer:</span> {cert.issuing_body}
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">Valid Until:</span>{" "}
-                    {new Date(cert.valid_until).toLocaleDateString()}
-                  </p>
-                  {cert.verified && <p className="text-green-600 font-medium">✓ Verified</p>}
+                  {cert.expiry_date && (
+                    <p>
+                      <span className="text-muted-foreground">Valid Until:</span>{" "}
+                      {new Date(cert.expiry_date).toLocaleDateString()}
+                    </p>
+                  )}
+                  {(cert.updated_at || cert.created_at) && (
+                    <p>
+                      <span className="text-muted-foreground">Approved On:</span>{" "}
+                      {new Date(cert.updated_at || cert.created_at).toLocaleDateString()}
+                    </p>
+                  )}
+                  {cert.document_url && (
+                    <p>
+                      <a
+                        className="text-primary underline"
+                        href={cert.document_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View Document
+                      </a>
+                    </p>
+                  )}
                 </div>
               </Card>
             ))}
@@ -102,8 +123,8 @@ export default function FarmerDashboard({ user, profile }) {
         ) : (
           <Card className="p-8 text-center">
             <p className="text-muted-foreground mb-4">No certifications added yet</p>
-            <Link href="/dashboard/add-certification">
-              <Button variant="outline">Add Your First Certification</Button>
+            <Link href="/dashboard/request-certification">
+              <Button variant="outline">Request Your First Certification</Button>
             </Link>
           </Card>
         )}

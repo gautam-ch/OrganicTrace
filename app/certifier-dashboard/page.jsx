@@ -7,6 +7,7 @@ import { createClient as createSb } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import DashboardHeader from "@/components/layout/dashboard-header"
 
 const oneYearMs = 365 * 24 * 60 * 60 * 1000
 
@@ -76,7 +77,10 @@ export default function CertifierDashboard() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+     <main className="min-h-screen bg-linear-to-b from-background to-muted">
+       <DashboardHeader/>
+    <div className="container mx-auto p-6 mt-8">
+        
       <Card>
         <CardHeader>
           <CardTitle>Certifier Dashboard</CardTitle>
@@ -102,8 +106,8 @@ export default function CertifierDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Farmer Address</TableHead>
+                    <TableHead>Applicant Name</TableHead>
+                    <TableHead>Farmer/Processor Address</TableHead>
                     <TableHead>Document</TableHead>
                     <TableHead>Notes</TableHead>
                     <TableHead>Action</TableHead>
@@ -143,6 +147,7 @@ export default function CertifierDashboard() {
         </CardContent>
       </Card>
     </div>
+    </main>
   )
 }
 

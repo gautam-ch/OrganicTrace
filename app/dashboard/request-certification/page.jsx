@@ -66,7 +66,7 @@ export default function RequestCertificationPage() {
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required />
             </div>
             <div>
-              <label className="block text-sm mb-1">Wallet Address</label>
+              <label className="block text-sm mb-1">Farmer/Processor Wallet Address</label>
               <Input
                 value={farmerAddress}
                 onChange={(e) => setFarmerAddress(e.target.value)}
