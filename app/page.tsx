@@ -2,8 +2,14 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import ConnectButton from "@/components/wallet/connect-button"
+import LogoutButton from "@/components/auth/logout-button"
+import { createClient } from "@/lib/supabase/server"
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   return (
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
       {/* Navigation */}
@@ -17,12 +23,23 @@ export default function Home() {
           </div>
           <div className="flex gap-3 items-center">
             <ConnectButton fixed={false} />
-            <Link href="/auth/login">
-              <Button variant="outline">Login</Button>
-            </Link>
-            <Link href="/auth/signup">
-              <Button className="bg-primary hover:bg-primary/90">Register</Button>
-            </Link>
+            {user ? (
+              <>
+                <Link href="/dashboard">
+                  <Button variant="outline">Dashboard</Button>
+                </Link>
+                <LogoutButton />
+              </>
+            ) : (
+              <>
+                <Link href="/auth/login">
+                  <Button variant="outline">Login</Button>
+                </Link>
+                <Link href="/auth/signup">
+                  <Button className="bg-primary hover:bg-primary/90">Register</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

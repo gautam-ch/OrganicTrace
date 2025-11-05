@@ -26,7 +26,7 @@ interface ChainProductResponse {
   }
   history: Array<{
     action: string
-    actor: string // formatted Address
+    Owner: string // formatted Address
     timestamp: string // formatted date
     details: string
   }>
@@ -278,7 +278,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       <h3 className="font-semibold text-lg">{entry.action}</h3>
                       <time className="text-sm text-muted-foreground">{entry.timestamp}</time>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">Actor: {entry.actor}</p>
+                    <p className="text-sm text-muted-foreground mb-2">Owner: {entry.Owner}</p>
                     {entry.details && renderDetails(entry.details)}
                   </div>
                 </div>

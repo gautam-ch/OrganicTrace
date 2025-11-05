@@ -12,8 +12,10 @@ import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import ConnectButton from "@/components/wallet/connect-button"
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi"
+import { readContract } from "wagmi/actions"
 import { parseEventLogs } from "viem"
-import { PRODUCT_TRACKER_ADDRESS, ProductTrackerABI } from "@/lib/contracts"
+import { CERT_REGISTRY_ADDRESS, PRODUCT_TRACKER_ADDRESS, CertificationRegistryABI, ProductTrackerABI } from "@/lib/contracts"
+import wagmiConfig from "@/lib/wagmi"
 
 export default function CreateProductPage() {
   const router = useRouter()
@@ -21,6 +23,7 @@ export default function CreateProductPage() {
   const [error, setError] = useState("")
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined)
   const [synced, setSynced] = useState(false)
+  const [isCertified, setIsCertified] = useState<boolean | null>(null)
   const { address } = useAccount()
   const { writeContractAsync } = useWriteContract()
   const {
@@ -49,6 +52,40 @@ export default function CreateProductPage() {
     setError("")
 
     try {
+      if (!address) {
+        throw new Error("Connect your wallet to create a product")
+      }
+
+      // Fail fast if contract addresses are not configured
+      if (!PRODUCT_TRACKER_ADDRESS || !CERT_REGISTRY_ADDRESS) {
+        throw new Error("Blockchain not configured: missing contract addresses. Check your .env and deployment step.")
+      }
+
+      // Guard: ensure the current wallet is certified on this chain
+      try {
+        const isCertified = await readContract(wagmiConfig, {
+          address: CERT_REGISTRY_ADDRESS as `0x${string}`,
+          abi: CertificationRegistryABI as any,
+          functionName: "verify",
+          args: [address as `0x${string}`],
+        })
+
+        if (!isCertified) {
+          throw new Error(
+            "Your wallet is not certified on this blockchain. If you're on a fresh local Hardhat node, re-run the seed scripts to add a certifier and grant certification, or ask a certifier on this network to approve you."
+          )
+        }
+      } catch (checkErr) {
+        // If the read itself fails (e.g., wrong address/ABI), surface a concise message
+        if (checkErr instanceof Error && checkErr.message) {
+          // Only override if we didn't already set a friendly message above
+          if (!checkErr.message.startsWith("Your wallet is not certified")) {
+            throw new Error("Unable to verify certification status. Ensure contracts are deployed on the selected network.")
+          }
+          throw checkErr
+        }
+      }
+
       // Compose details payload for on-chain storage (JSON string)
       const details = JSON.stringify({
         product_sku: formData.product_sku,
@@ -68,11 +105,48 @@ export default function CreateProductPage() {
 
       setTxHash(hash)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create product")
+      // Normalize common viem/contract errors to concise, user-friendly messages
+      const msg = err instanceof Error ? err.message : String(err)
+
+      let friendly = "Failed to create product"
+
+      if (/certified farmers/i.test(msg) || /not certified/i.test(msg)) {
+        friendly =
+          "You are not a certified farmer, request a certifier to approve you."
+      } else if (/Internal JSON-RPC error|execution reverted/i.test(msg)) {
+        friendly =
+          "Transaction reverted. Check that your wallet is certified and the correct network is selected."
+      } else if (/missing contract addresses|Blockchain not configured/i.test(msg)) {
+        friendly = msg
+      }
+
+      setError(friendly)
     } finally {
       // Keep loading until receipt is mined to proceed with syncing
     }
   }
+
+  // Proactively check on-chain certification to guide the user
+  useEffect(() => {
+    const run = async () => {
+      if (!address || !CERT_REGISTRY_ADDRESS) {
+        setIsCertified(null)
+        return
+      }
+      try {
+        const ok = await readContract(wagmiConfig, {
+          address: CERT_REGISTRY_ADDRESS as `0x${string}`,
+          abi: CertificationRegistryABI as any,
+          functionName: "verify",
+          args: [address as `0x${string}`],
+        })
+        setIsCertified(!!ok)
+      } catch {
+        setIsCertified(null)
+      }
+    }
+    run()
+  }, [address])
 
   // Once the transaction is mined, parse the ProductCreated event and sync to Supabase
   useEffect(() => {
@@ -102,9 +176,10 @@ export default function CreateProductPage() {
           return
         }
 
-        const { data, error: insertError } = await supabase
+        const { data, error: upsertError } = await supabase
           .from("products")
-          .insert([
+          // Use upsert to make local Hardhat resets/dev id collisions harmless
+          .upsert([
             {
               farmer_id: user.id,
               current_owner_id: user.id,
@@ -121,10 +196,10 @@ export default function CreateProductPage() {
               current_owner_address: address || null,
               blockchain_hash: receipt.transactionHash,
             },
-          ])
+          ], { onConflict: "product_id_onchain" })
           .select()
 
-        if (insertError) throw insertError
+        if (upsertError) throw upsertError
 
         setSynced(true)
         setLoading(false)
@@ -132,9 +207,24 @@ export default function CreateProductPage() {
           // Prefer navigating to on-chain product page using productId
           router.push(`/product/${Number(productId)}`)
         }
-      } catch (e) {
+      } catch (e: any) {
         setLoading(false)
-        setError(e instanceof Error ? e.message : "Failed to sync product to database")
+        // Extract helpful supabase/Postgres error messages
+        const rawMsg = e?.message || e?.error?.message || e?.hint || null
+        let friendly = rawMsg || "Failed to sync product to database"
+
+        // Postgres unique constraint
+        const code = e?.code || e?.details?.code
+        const constraint = e?.details?.constraint || e?.constraint
+        if (code === "23505" || /duplicate key value/i.test(String(rawMsg))) {
+          if (/products_product_sku_key/i.test(String(constraint)) || /product_sku/i.test(String(rawMsg))) {
+            friendly = "Product SKU already exists. Please use a unique SKU."
+          } else if (/product_id_onchain/i.test(String(rawMsg)) || /product_id_onchain/i.test(String(constraint))) {
+            friendly = "A product with the same on-chain id already exists locally. We now upsert on this key; please try again."
+          }
+        }
+
+        setError(friendly)
       }
     }
 

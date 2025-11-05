@@ -44,6 +44,15 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
 
   if (!injected) return null
 
+  // Hide noisy errors that are expected UX (dismissed request, pending request)
+  const displayError = useMemo(() => {
+    if (!error) return null
+    const msg = String(error.message || "")
+    if (/user rejected/i.test(msg)) return null
+    if (/request already pending|request pending/i.test(msg)) return null
+    return error
+  }, [error])
+
   return (
     <div className={containerClass}>
       {!isConnected ? (
@@ -74,8 +83,8 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
         </select>
       )}
 
-      {error && !isConnected && (
-        <span className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">{error.message}</span>
+      {displayError && !isConnected && (
+        <span className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">{displayError.message}</span>
       )}
     </div>
   )
