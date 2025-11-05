@@ -88,6 +88,55 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const { product, history } = data
   const isCertified = product.isFarmerCertified
 
+  // --- UI helpers to render friendlier event details instead of raw JSON ---
+  const tryParseJSON = (value: string): unknown | null => {
+    try {
+      // quick exit for obviously non-JSON strings
+      if (!value || (value[0] !== "{" && value[0] !== "[")) return null
+      return JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+
+  const toTitle = (key: string): string => {
+    // handle snake_case or camelCase -> Title Case
+    const spaced = key
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .trim()
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+  }
+
+  const renderDetails = (details: string) => {
+    const parsed = tryParseJSON(details)
+    if (parsed && typeof parsed === "object") {
+      const entries = Object.entries(parsed as Record<string, unknown>)
+      if (entries.length === 0) return null
+      return (
+        <div className="rounded-md border border-border bg-muted/40">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
+            {entries.map(([k, v]) => {
+              const value = Array.isArray(v)
+                ? v.join(", ")
+                : typeof v === "object" && v !== null
+                ? JSON.stringify(v)
+                : String(v)
+              return (
+                <div key={k} className="p-3 border-t first:border-t-0 sm:first:border-t sm:border-l-0 border-border">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{toTitle(k)}</p>
+                  <p className="text-sm font-medium wrap-break-word">{value}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+    // Fallback to plain text if not JSON
+  return <p className="text-sm bg-muted/50 p-3 rounded wrap-break-word">{details}</p>
+  }
+
   return (
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
       {/* Navigation */}
@@ -164,7 +213,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       <time className="text-sm text-muted-foreground">{entry.timestamp}</time>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">Actor: {entry.actor}</p>
-                    {entry.details && <p className="text-sm bg-muted/50 p-3 rounded">{entry.details}</p>}
+                    {entry.details && renderDetails(entry.details)}
                   </div>
                 </div>
               </Card>
