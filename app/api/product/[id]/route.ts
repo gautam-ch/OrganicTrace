@@ -1,14 +1,45 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getProductDetails } from "@/lib/blockchain"
-import { verifyCertification, formatDate, formatAddress } from "@/lib/blockchain"
+import { getProductDetails, verifyCertification, formatDate, formatAddress } from "@/lib/blockchain"
+import { createClient as createSb } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const productId = Number.parseInt(id)
 
-    if (isNaN(productId)) {
-      return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
+    // Basic env checks to provide clearer errors during setup
+    if (!process.env.PRODUCT_TRACKER_ADDRESS) {
+      return NextResponse.json(
+        { error: "Server env PRODUCT_TRACKER_ADDRESS is not set. Deploy contracts and set .env.local/.env" },
+        { status: 500 },
+      )
+    }
+    if (!process.env.CERT_REGISTRY_ADDRESS) {
+      return NextResponse.json(
+        { error: "Server env CERT_REGISTRY_ADDRESS is not set. Deploy contracts and set .env.local/.env" },
+        { status: 500 },
+      )
+    }
+
+    // Accept either numeric on-chain id or UUID from Supabase and map to on-chain id
+    let productId: number | null = null
+    if (/^\d+$/.test(id)) {
+      productId = Number.parseInt(id, 10)
+    } else {
+      // Resolve UUID -> on-chain id via Supabase
+      const supabase = await createSb()
+      const { data: prod, error: prodErr } = await supabase
+        .from("products")
+        .select("product_id_onchain")
+        .eq("id", id)
+        .maybeSingle()
+
+      if (prodErr) {
+        return NextResponse.json({ error: prodErr.message }, { status: 400 })
+      }
+      if (!prod || prod.product_id_onchain == null) {
+        return NextResponse.json({ error: "No on-chain mapping found for this product" }, { status: 404 })
+      }
+      productId = Number(prod.product_id_onchain)
     }
 
     // Fetch product from blockchain
@@ -43,6 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(response)
   } catch (error) {
     console.error("Product fetch error:", error)
-    return NextResponse.json({ error: "Failed to fetch product" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to fetch product"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

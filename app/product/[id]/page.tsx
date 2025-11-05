@@ -1,56 +1,42 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { use } from "react"
 import ConnectButton from "@/components/wallet/connect-button"
 
-interface ProductData {
-  id: string
-  product_name: string
-  product_sku: string
-  product_type: string
-  description: string
-  farming_practices: string
-  harvest_date: string
-  status: string
-  created_at: string
-  current_owner_id: string
-  farmer_id: string
-  certifications: {
-    certification_type: string
-    certification_number: string
-    valid_until: string
-    verified: boolean
-  } | null
-  movements: Array<{
+interface ChainProductResponse {
+  product: {
     id: string
-    movement_type: string
-    location: string
-    notes: string
-    timestamp: string
-    from_user_id: string
-    to_user_id: string
+    name: string
+    farmer: string // formatted (0x1234...5678)
+    farmerFull: string
+    currentOwner: string // formatted
+    createdAt: string // formatted date
+    isFarmerCertified: boolean
+  }
+  history: Array<{
+    action: string
+    actor: string // formatted Address
+    timestamp: string // formatted date
+    details: string
   }>
-  farmer_name: string
-  current_owner_name: string
 }
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const [product, setProduct] = useState<ProductData | null>(null)
+  const [data, setData] = useState<ChainProductResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await fetch(`/api/products/${id}`)
-        if (!response.ok) throw new Error("Product not found")
-        const data = await response.json()
-        setProduct(data)
+        const response = await fetch(`/api/product/${id}`)
+        if (!response.ok) throw new Error("Product not found on chain")
+        const json = await response.json()
+        setData(json)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch product")
       } finally {
@@ -72,7 +58,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  if (error || !product) {
+  if (error || !data) {
     return (
       <main className="min-h-screen bg-background">
         <nav className="border-b border-border bg-background/80 sticky top-0 z-50">
@@ -99,7 +85,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  const isCertified = product.certifications?.verified
+  const { product, history } = data
+  const isCertified = product.isFarmerCertified
 
   return (
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
@@ -128,94 +115,56 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         <Card className="p-8 border border-border">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h1 className="text-3xl font-bold mb-2">{product.product_name}</h1>
-              <p className="text-muted-foreground mb-3">{product.product_type}</p>
+              <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
               <div className="flex gap-3 flex-wrap">
                 {isCertified && (
                   <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
-                    ✓ Certified Organic
+                    ✓ Farmer Certified
                   </span>
                 )}
-                <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                  {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+                <span className="inline-flex items-center px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium">
+                  On-Chain Product #{product.id}
                 </span>
               </div>
             </div>
             <div className="text-right text-sm text-muted-foreground">
-              <p>SKU: {product.product_sku}</p>
-              <p>Created: {new Date(product.created_at).toLocaleDateString()}</p>
+              <p>Created: {product.createdAt}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-6 border-t border-border">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-border">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Origin Farmer</p>
-              <p className="font-semibold">{product.farmer_name}</p>
+              <p className="font-semibold">{product.farmer}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Current Owner</p>
-              <p className="font-semibold">{product.current_owner_name}</p>
+              <p className="font-semibold">{product.currentOwner}</p>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Harvest Date</p>
-              <p className="font-semibold">
-                {product.harvest_date ? new Date(product.harvest_date).toLocaleDateString() : "N/A"}
-              </p>
-            </div>
-            {product.certifications && (
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Certification</p>
-                <p className="font-semibold">{product.certifications.certification_type}</p>
-              </div>
-            )}
           </div>
-
-          {product.description && (
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Description</p>
-              <p className="text-foreground">{product.description}</p>
-            </div>
-          )}
-
-          {product.farming_practices && (
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Farming Practices</p>
-              <p className="text-foreground">{product.farming_practices}</p>
-            </div>
-          )}
         </Card>
       </section>
 
-      {/* Product Journey */}
+      {/* Product Journey (On-Chain History) */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
         <h2 className="text-2xl font-bold mb-8">Product Journey</h2>
 
-        {product.movements && product.movements.length > 0 ? (
+        {history && history.length > 0 ? (
           <div className="space-y-6">
-            {product.movements.map((movement, index) => (
-              <Card key={movement.id} className="p-6 border border-border">
+            {history.map((entry, index) => (
+              <Card key={`${entry.action}-${index}`} className="p-6 border border-border">
                 <div className="flex gap-4">
                   <div className="flex flex-col items-center">
                     <div className="w-4 h-4 rounded-full bg-primary"></div>
-                    {index < product.movements!.length - 1 && <div className="w-0.5 h-20 bg-border mt-2"></div>}
+                    {index < history.length - 1 && <div className="w-0.5 h-20 bg-border mt-2"></div>}
                   </div>
                   <div className="flex-1 pt-1">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-lg">
-                        {movement.movement_type === "transfer"
-                          ? "Transferred"
-                          : movement.movement_type === "processing"
-                            ? "Processing"
-                            : "Received"}
-                      </h3>
-                      <time className="text-sm text-muted-foreground">
-                        {new Date(movement.timestamp).toLocaleString()}
-                      </time>
+                      <h3 className="font-semibold text-lg">{entry.action}</h3>
+                      <time className="text-sm text-muted-foreground">{entry.timestamp}</time>
                     </div>
-                    {movement.location && (
-                      <p className="text-sm text-muted-foreground mb-2">Location: {movement.location}</p>
-                    )}
-                    {movement.notes && <p className="text-sm bg-muted/50 p-3 rounded">{movement.notes}</p>}
+                    <p className="text-sm text-muted-foreground mb-2">Actor: {entry.actor}</p>
+                    {entry.details && <p className="text-sm bg-muted/50 p-3 rounded">{entry.details}</p>}
                   </div>
                 </div>
               </Card>
@@ -223,7 +172,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </div>
         ) : (
           <Card className="p-6 border border-border text-center">
-            <p className="text-muted-foreground">No movement history available yet</p>
+            <p className="text-muted-foreground">No on-chain history available yet</p>
           </Card>
         )}
       </section>

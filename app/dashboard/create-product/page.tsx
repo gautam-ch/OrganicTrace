@@ -129,7 +129,8 @@ export default function CreateProductPage() {
         setSynced(true)
         setLoading(false)
         if (data && data[0]) {
-          router.push(`/product/${data[0].id}`)
+          // Prefer navigating to on-chain product page using productId
+          router.push(`/product/${Number(productId)}`)
         }
       } catch (e) {
         setLoading(false)
