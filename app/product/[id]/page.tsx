@@ -231,9 +231,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </DialogContent>
                   </Dialog>
                 )}
-                <span className="inline-flex items-center px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium">
+                <a
+                  href={`${explorerBase}/address/${process.env.NEXT_PUBLIC_PRODUCT_TRACKER_ADDRESS}#readContract`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`View contract state on explorer. In Read Contract, call getProduct with ID ${product.id}.`}
+                  className="inline-flex items-center px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+                >
                   On-Chain Product #{product.id}
-                </span>
+                </a>
               </div>
             </div>
             <div className="text-right text-sm text-muted-foreground">
@@ -260,7 +266,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
         {history && history.length > 0 ? (
           <div className="space-y-6">
-            {history.map((entry, index) => (
+            {history.map((entry: ChainProductResponse["history"][number], index) => (
               <Card key={`${entry.action}-${index}`} className="p-6 border border-border">
                 <div className="flex gap-4">
                   <div className="flex flex-col items-center">
