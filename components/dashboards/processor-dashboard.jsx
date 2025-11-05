@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -11,12 +11,33 @@ export default function ProcessorDashboard({ user, profile }) {
   const [certifications, setCertifications] = useState([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const walletAddress = useMemo(() => (profile?.wallet_address || "").toLowerCase(), [profile?.wallet_address])
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch products received by this processor
-        const { data: productsData } = await supabase.from("products").select("*").eq("current_owner_id", user.id)
+        // 1) Fetch products assigned by user id
+        const { data: byUser } = await supabase.from("products").select("*").eq("current_owner_id", user.id)
+
+        // 2) Also fetch any unclaimed transfers that match this user's wallet
+        let byWallet = []
+        if (walletAddress) {
+          const { data: byAddr } = await supabase
+            .from("products")
+            .select("*")
+            .is("current_owner_id", null)
+            .eq("current_owner_address", walletAddress)
+          byWallet = byAddr || []
+
+          // Optional backfill: claim these to the logged-in user for persistence
+          if (byWallet.length > 0) {
+            const ids = byWallet.map((p) => p.id)
+            await supabase
+              .from("products")
+              .update({ current_owner_id: user.id })
+              .in("id", ids)
+          }
+        }
 
         // Fetch processor's approved certification requests (same table used by farmers)
         const { data: certsData } = await supabase
@@ -26,7 +47,10 @@ export default function ProcessorDashboard({ user, profile }) {
           .eq("status", "approved")
           .order("updated_at", { ascending: false })
 
-        setReceivedProducts(productsData || [])
+        // Merge and de-duplicate products
+        const merged = [...(byUser || []), ...byWallet]
+        const unique = Array.from(new Map(merged.map((p) => [p.id, p])).values())
+        setReceivedProducts(unique)
         setCertifications(certsData || [])
       } catch (err) {
         console.error("[v0] Error fetching processor data:", err)
@@ -36,7 +60,7 @@ export default function ProcessorDashboard({ user, profile }) {
     }
 
     fetchData()
-  }, [user.id, supabase])
+  }, [user.id, walletAddress, supabase])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()

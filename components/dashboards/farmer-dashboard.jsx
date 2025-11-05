@@ -1,16 +1,33 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi"
+import wagmiConfig from "@/lib/wagmi"
+import { isAddress } from "viem"
+import { PRODUCT_TRACKER_ADDRESS, ProductTrackerABI } from "@/lib/contracts"
 
 export default function FarmerDashboard({ user, profile }) {
   const [products, setProducts] = useState([])
   const [certifications, setCertifications] = useState([])
   const [loading, setLoading] = useState(true)
+  const [active, setActive] = useState(null) // product selected for transfer
+  const [toAddress, setToAddress] = useState("")
+  const [action, setAction] = useState("Transferred to Processor")
+  const [location, setLocation] = useState("")
+  const [notes, setNotes] = useState("")
+  const [error, setError] = useState("")
+  const [txHash, setTxHash] = useState(undefined)
   const supabase = createClient()
+  const { address } = useAccount()
+  const { writeContractAsync } = useWriteContract()
+  const { data: receipt, isLoading: waitingReceipt, isSuccess: isMined } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -37,6 +54,71 @@ export default function FarmerDashboard({ user, profile }) {
 
     fetchData()
   }, [user.id, supabase])
+  // After a successful on-chain transfer, persist minimal metadata locally and refresh list
+  useEffect(() => {
+    const persist = async () => {
+      if (!isMined || !receipt || !active) return
+      try {
+        // Try to map recipient wallet to an existing user profile
+        let toUserId = null
+        const { data: prof } = await supabase.from("profiles").select("id").eq("wallet_address", toAddress).maybeSingle()
+        toUserId = prof?.id || null
+
+        // Update our products table: owner id (if known), owner address always, status in_transit
+        await supabase
+          .from("products")
+          .update({ current_owner_id: toUserId, current_owner_address: toAddress, status: "in_transit" })
+          .eq("id", active.id)
+
+        // Optimistically update UI list
+        setProducts((prev) => prev.map((p) => (p.id === active.id ? { ...p, current_owner_id: toUserId, current_owner_address: toAddress, status: "in_transit" } : p)))
+      } catch (e) {
+        // Non-blocking
+      } finally {
+        setActive(null)
+        setToAddress("")
+        setAction("Transferred to Processor")
+        setLocation("")
+        setNotes("")
+        setError("")
+      }
+    }
+    persist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMined, receipt])
+
+  const canTransfer = useMemo(() => {
+    if (!active) return false
+    // Allow transfer if the current dashboard user is also the current owner in DB
+    return active.current_owner_id === user.id
+  }, [active, user.id])
+
+  const submitTransfer = async () => {
+    try {
+      setError("")
+      if (!active) return
+      if (!PRODUCT_TRACKER_ADDRESS) throw new Error("Blockchain not configured: missing ProductTracker address")
+      if (!isAddress(toAddress)) throw new Error("Enter a valid Ethereum address")
+      if (!active.product_id_onchain) throw new Error("This product is not linked to an on-chain id")
+
+      const details = JSON.stringify({ to: toAddress, movement_type: "to_processor", location: location || undefined, notes: notes || undefined })
+
+      const hash = await writeContractAsync({
+        address: PRODUCT_TRACKER_ADDRESS,
+        abi: ProductTrackerABI,
+        functionName: "transferProduct",
+        args: [BigInt(active.product_id_onchain), toAddress, action, details],
+      })
+      setTxHash(hash)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      let friendly = "Failed to transfer product"
+      if (/Only current owner/i.test(msg)) friendly = "You are not the current owner"
+      else if (/invalid address/i.test(msg) || /valid Ethereum address/i.test(msg)) friendly = "Enter a valid Ethereum address"
+      else if (/Blockchain not configured/i.test(msg)) friendly = msg
+      setError(friendly)
+    }
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -152,6 +234,51 @@ export default function FarmerDashboard({ user, profile }) {
                   <p>
                     <span className="text-muted-foreground">Status:</span> {product.status}
                   </p>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  {product.current_owner_id === user.id ? (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setActive(product)}>
+                          Transfer
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Transfer Product</DialogTitle>
+                          <DialogDescription>
+                            Send ownership on-chain. This will appear instantly in the product journey.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="to">Recipient Address</Label>
+                            <Input id="to" placeholder="0x..." value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label htmlFor="action">Action</Label>
+                            <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label htmlFor="location">Location (optional)</Label>
+                            <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label htmlFor="notes">Notes (optional)</Label>
+                            <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                          </div>
+                          {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded text-sm">{error}</div>}
+                          <div className="flex gap-2">
+                            <Button disabled={!canTransfer || waitingReceipt} onClick={submitTransfer} className="flex-1 bg-primary hover:bg-primary/90">
+                              {waitingReceipt ? "Transferring..." : "Confirm Transfer"}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  ) : (
+                    <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">Transferred</span>
+                  )}
                 </div>
                 <Link href={`/product/${product.id}`}>
                   <Button variant="outline" size="sm" className="w-full bg-transparent">

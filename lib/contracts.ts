@@ -43,6 +43,18 @@ export const ProductTrackerABI: any[] = [
     stateMutability: "nonpayable",
     type: "function",
   },
+	{
+		inputs: [
+			{ internalType: "uint256", name: "_productId", type: "uint256" },
+			{ internalType: "address", name: "_newOwner", type: "address" },
+			{ internalType: "string", name: "_action", type: "string" },
+			{ internalType: "string", name: "_details", type: "string" },
+		],
+		name: "transferProduct",
+		outputs: [],
+		stateMutability: "nonpayable",
+		type: "function",
+	},
   {
     anonymous: false,
     inputs: [
@@ -53,5 +65,16 @@ export const ProductTrackerABI: any[] = [
     name: "ProductCreated",
     type: "event",
   },
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, internalType: "uint256", name: "productId", type: "uint256" },
+			{ indexed: true, internalType: "address", name: "from", type: "address" },
+			{ indexed: true, internalType: "address", name: "to", type: "address" },
+			{ indexed: false, internalType: "string", name: "action", type: "string" },
+		],
+		name: "ProductTransferred",
+		type: "event",
+	},
 ]
 
