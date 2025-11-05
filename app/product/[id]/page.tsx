@@ -13,7 +13,10 @@ interface ChainProductResponse {
     name: string
     farmer: string // formatted (0x1234...5678)
     farmerFull: string
+    farmerName?: string | null
     currentOwner: string // formatted
+    currentOwnerFull?: string
+    currentOwnerName?: string | null
     createdAt: string // formatted date
     isFarmerCertified: boolean
     certification?: {
@@ -26,7 +29,7 @@ interface ChainProductResponse {
   }
   history: Array<{
     action: string
-    Owner: string // formatted Address
+    actor: string // formatted Address
     timestamp: string // formatted date
     details: string
   }>
@@ -250,11 +253,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-border">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Origin Farmer</p>
-              <p className="font-semibold">{product.farmer}</p>
+              <p className="font-semibold">
+                {product.farmerName || product.farmer}
+              </p>
+              <p className="text-xs text-muted-foreground font-mono">{product.farmer}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Current Owner</p>
-              <p className="font-semibold">{product.currentOwner}</p>
+              <p className="font-semibold">
+                {product.currentOwnerName || product.currentOwner}
+              </p>
+              <p className="text-xs text-muted-foreground font-mono">{product.currentOwner}</p>
             </div>
           </div>
         </Card>
@@ -278,7 +287,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       <h3 className="font-semibold text-lg">{entry.action}</h3>
                       <time className="text-sm text-muted-foreground">{entry.timestamp}</time>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">Owner: {entry.Owner}</p>
+                    <p className="text-sm text-muted-foreground mb-2">Owner: {entry.actor}</p>
                     {entry.details && renderDetails(entry.details)}
                   </div>
                 </div>

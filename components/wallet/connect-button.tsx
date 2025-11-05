@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain, useReadContract } from "wagmi"
 import { useRouter, usePathname } from "next/navigation"
 import { CertificationRegistryABI, CERT_REGISTRY_ADDRESS } from "@/lib/contracts.js"
@@ -18,6 +18,7 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
   const { connect, connectors, status, error } = useConnect()
   const { disconnect } = useDisconnect()
   const { chains, switchChain, isPending: isSwitching } = useSwitchChain()
+  const lastPosted = useRef<string | null>(null)
 
   const injected = useMemo(() => connectors.find((c) => c.id === "injected"), [connectors])
   // If connected and this address is a certifier, auto-route to certifier dashboard
@@ -36,6 +37,29 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
       router.push("/certifier-dashboard")
     }
   }, [isConnected, address, isCertifier, pathname, router])
+
+  // When a user is logged in and connects a wallet, persist the address to their profile.
+  useEffect(() => {
+    const save = async () => {
+      try {
+        if (!isConnected || !address) return
+        // Avoid spamming duplicate posts for same address
+        if (lastPosted.current === address) return
+        const res = await fetch("/api/me/wallet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        })
+        // If user not logged in (401), just ignore silently
+        if (res.ok) {
+          lastPosted.current = address
+        }
+      } catch {
+        // Non-blocking best-effort; ignore
+      }
+    }
+    save()
+  }, [isConnected, address])
 
 
   const containerClass = fixed

@@ -55,14 +55,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       productId = Number(prod.product_id_onchain)
     }
 
-    // Fetch product from blockchain
+  // Fetch product from blockchain
     const productData = await getProductDetails(productId)
 
     if (!productData) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    // Verify farmer certification
+  // Verify farmer certification
     const isCertified = await verifyCertification(productData.farmer)
 
     // Optionally fetch certification proof
@@ -121,14 +121,96 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Format response with readable data
+    // Resolve human-friendly names from Supabase where possible
+    let farmerName: string | null = null
+    let ownerName: string | null = null
+
+    // Try resolving via products table (preferred, authoritative mapping)
+    try {
+      // If request id was a UUID, we already looked up by id. Otherwise use on-chain id mapping
+      const { data: prodForNames } = await supabase
+        .from("products")
+        .select("farmer_id,current_owner_id")
+        .or(
+          // try both lookup styles in one query
+          [
+            // when original param was a UUID
+            `id.eq.${id}`,
+            // when original param was numeric on-chain id
+            productId != null ? `product_id_onchain.eq.${productId}` : "",
+          ]
+            .filter(Boolean)
+            .join(","),
+        )
+        .limit(1)
+        .maybeSingle()
+
+      const userIds: string[] = []
+      if (prodForNames?.farmer_id) userIds.push(prodForNames.farmer_id)
+      if (prodForNames?.current_owner_id) userIds.push(prodForNames.current_owner_id)
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from("profiles").select("id,full_name").in("id", userIds)
+        const map = new Map<string, string>()
+        profiles?.forEach((p: any) => {
+          if (p?.id && p?.full_name) map.set(p.id, p.full_name as string)
+        })
+        if (prodForNames?.farmer_id) farmerName = map.get(prodForNames.farmer_id) || null
+        if (prodForNames?.current_owner_id) ownerName = map.get(prodForNames.current_owner_id) || null
+      }
+    } catch (_) {
+      // ignore name resolution errors; fallbacks below
+    }
+
+    // Fallback 1: resolve by profiles.wallet_address if available
+    if (!farmerName || !ownerName) {
+      try {
+        const addrFilters: string[] = []
+        if (!farmerName) addrFilters.push(`wallet_address.eq.${productData.farmer}`)
+        if (!ownerName) addrFilters.push(`wallet_address.eq.${productData.currentOwner}`)
+        if (addrFilters.length > 0) {
+          const { data: profByAddr } = await supabase
+            .from("profiles")
+            .select("wallet_address,full_name")
+            .or(addrFilters.join(","))
+          profByAddr?.forEach((p: any) => {
+            if (!p) return
+            if (!farmerName && p.wallet_address === productData.farmer && p.full_name) farmerName = p.full_name
+            if (!ownerName && p.wallet_address === productData.currentOwner && p.full_name) ownerName = p.full_name
+          })
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    // Fallback 2: use certification_requests.name for farmer wallet address
+    if (!farmerName) {
+      try {
+        const { data: reqDoc } = await supabase
+          .from("certification_requests")
+          .select("name")
+          .eq("farmer_address", productData.farmer)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        farmerName = (reqDoc as any)?.name || null
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    // Format response with readable data, including optional names
     const response = {
       product: {
         id: productData.productId,
         name: productData.productName,
         farmer: formatAddress(productData.farmer),
         farmerFull: productData.farmer,
+        farmerName: farmerName || null,
         currentOwner: formatAddress(productData.currentOwner),
+        currentOwnerFull: productData.currentOwner,
+        currentOwnerName: ownerName || null,
         createdAt: formatDate(productData.createdAt),
         isFarmerCertified: isCertified,
         certification,
