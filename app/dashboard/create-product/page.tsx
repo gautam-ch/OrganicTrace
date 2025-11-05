@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -11,11 +11,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import ConnectButton from "@/components/wallet/connect-button"
+import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi"
+import { parseEventLogs } from "viem"
+import { PRODUCT_TRACKER_ADDRESS, ProductTrackerABI } from "@/lib/contracts"
 
 export default function CreateProductPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined)
+  const [synced, setSynced] = useState(false)
+  const { address } = useAccount()
+  const { writeContractAsync } = useWriteContract()
+  const {
+    data: receipt,
+    isLoading: waitingReceipt,
+    isSuccess: isMined,
+    error: receiptError,
+  } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 })
   const [formData, setFormData] = useState({
     product_name: "",
     product_sku: "",
@@ -36,39 +49,97 @@ export default function CreateProductPage() {
     setError("")
 
     try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      // Compose details payload for on-chain storage (JSON string)
+      const details = JSON.stringify({
+        product_sku: formData.product_sku,
+        product_type: formData.product_type,
+        description: formData.description,
+        farming_practices: formData.farming_practices,
+        harvest_date: formData.harvest_date,
+      })
 
-      if (!user) {
-        setError("Not authenticated")
-        return
-      }
+      // Call ProductTracker.createProduct(name, parentId=0, details)
+      const hash = await writeContractAsync({
+        address: PRODUCT_TRACKER_ADDRESS as `0x${string}`,
+        abi: ProductTrackerABI as any,
+        functionName: "createProduct",
+        args: [formData.product_name, BigInt(0), details],
+      })
 
-      const { data, error: insertError } = await supabase
-        .from("products")
-        .insert([
-          {
-            farmer_id: user.id,
-            current_owner_id: user.id,
-            ...formData,
-            status: "created",
-          },
-        ])
-        .select()
-
-      if (insertError) throw insertError
-
-      if (data && data[0]) {
-        router.push(`/product/${data[0].id}`)
-      }
+      setTxHash(hash)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create product")
     } finally {
-      setLoading(false)
+      // Keep loading until receipt is mined to proceed with syncing
     }
   }
+
+  // Once the transaction is mined, parse the ProductCreated event and sync to Supabase
+  useEffect(() => {
+    const syncIfReady = async () => {
+      if (!isMined || !receipt || synced) return
+
+      try {
+        // Parse ProductCreated(productId, farmer, productName)
+        const events = parseEventLogs({
+          abi: ProductTrackerABI as any,
+          logs: receipt.logs || [],
+          eventName: "ProductCreated",
+        }) as unknown as Array<{ args: { productId: bigint } }>
+
+        const productId = events?.[0]?.args?.productId
+        if (typeof productId !== "bigint") {
+          throw new Error("Could not parse productId from transaction logs")
+        }
+
+        const supabase = createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) {
+          setError("Not authenticated")
+          return
+        }
+
+        const { data, error: insertError } = await supabase
+          .from("products")
+          .insert([
+            {
+              farmer_id: user.id,
+              current_owner_id: user.id,
+              product_name: formData.product_name,
+              product_sku: formData.product_sku,
+              product_type: formData.product_type,
+              description: formData.description,
+              farming_practices: formData.farming_practices,
+              harvest_date: formData.harvest_date || null,
+              status: "created",
+              // On-chain linkage
+              product_id_onchain: Number(productId),
+              last_tx_hash: receipt.transactionHash,
+              current_owner_address: address || null,
+              blockchain_hash: receipt.transactionHash,
+            },
+          ])
+          .select()
+
+        if (insertError) throw insertError
+
+        setSynced(true)
+        setLoading(false)
+        if (data && data[0]) {
+          router.push(`/product/${data[0].id}`)
+        }
+      } catch (e) {
+        setLoading(false)
+        setError(e instanceof Error ? e.message : "Failed to sync product to database")
+      }
+    }
+
+    syncIfReady()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMined, receipt, synced])
 
   return (
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
@@ -171,8 +242,8 @@ export default function CreateProductPage() {
             {error && <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg text-sm">{error}</div>}
 
             <div className="flex gap-4 pt-6">
-              <Button type="submit" disabled={loading} className="flex-1 bg-primary hover:bg-primary/90">
-                {loading ? "Creating..." : "Create Product"}
+              <Button type="submit" disabled={loading || waitingReceipt} className="flex-1 bg-primary hover:bg-primary/90">
+                {loading || waitingReceipt ? (txHash ? "Waiting for confirmation..." : "Creating...") : "Create Product"}
               </Button>
               <Link href="/dashboard" className="flex-1">
                 <Button variant="outline" className="w-full bg-transparent">
