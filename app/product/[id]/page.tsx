@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import ConnectButton from "@/components/wallet/connect-button"
 
 interface ChainProductResponse {
@@ -15,6 +16,13 @@ interface ChainProductResponse {
     currentOwner: string // formatted
     createdAt: string // formatted date
     isFarmerCertified: boolean
+    certification?: {
+      certifier: string // formatted
+      certifierFull: string
+      verifiedAt: string // formatted date
+      txHash: string
+      documentUrl?: string | null
+    } | null
   }
   history: Array<{
     action: string
@@ -87,6 +95,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   const { product, history } = data
   const isCertified = product.isFarmerCertified
+  const explorerBase = process.env.NEXT_PUBLIC_BLOCK_EXPLORER_BASE || "https://sepolia.etherscan.io"
 
   // --- UI helpers to render friendlier event details instead of raw JSON ---
   const tryParseJSON = (value: string): unknown | null => {
@@ -167,9 +176,60 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
               <div className="flex gap-3 flex-wrap">
                 {isCertified && (
-                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
-                    ✓ Farmer Certified
-                  </span>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium hover:bg-green-200 transition-colors">
+                        ✓ Farmer Certified
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Certification Verified</DialogTitle>
+                        <DialogDescription>
+                          This farmer has an active on-chain organic certification.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="mt-2 space-y-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Verified by</p>
+                          <p className="font-medium">{product.certification?.certifier || "Unknown"}</p>
+                          {product.certification?.certifierFull && (
+                            <p className="text-xs text-muted-foreground">{product.certification.certifierFull}</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Verified on</p>
+                          <p className="font-medium">{product.certification?.verifiedAt ?? "—"}</p>
+                        </div>
+                        {product.certification?.txHash && (
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Transaction</p>
+                            <a
+                              href={`${explorerBase}/tx/${product.certification.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline break-all"
+                            >
+                              {product.certification.txHash}
+                            </a>
+                          </div>
+                        )}
+                        {product.certification?.documentUrl && (
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Document</p>
+                            <a
+                              href={product.certification.documentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline break-all"
+                            >
+                              View certificate/document
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 )}
                 <span className="inline-flex items-center px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium">
                   On-Chain Product #{product.id}

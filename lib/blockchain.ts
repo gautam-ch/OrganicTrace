@@ -4,6 +4,8 @@ import { ethers } from "ethers"
 const CERT_REGISTRY_ABI = [
   "function verify(address _farmer) public view returns (bool)",
   "function getCertification(address _farmer) public view returns (bool certified, uint256 expiryDate, string memory body, uint256 grantedAt)",
+  // Event used to discover the certifier address and transaction hash
+  "event CertificationGranted(address indexed farmer, address indexed certifier, uint256 expiryDate)",
 ]
 
 // ABI for ProductTracker contract
@@ -62,6 +64,42 @@ export async function getCertificationDetails(farmerAddress: string) {
     }
   } catch (error) {
     console.error("Error getting certification details:", error)
+    return null
+  }
+}
+
+/**
+ * Find the most recent CertificationGranted event for a farmer to extract the
+ * certifier address and tx hash. Falls back to nulls if none are found.
+ */
+export async function getCertificationGrantProof(farmerAddress: string) {
+  try {
+    const iface = new ethers.Interface(CERT_REGISTRY_ABI)
+    const topic0 = ethers.id("CertificationGranted(address,address,uint256)")
+    const farmerTopic = ethers.zeroPadValue(ethers.getAddress(farmerAddress), 32)
+
+    const logs = await provider.getLogs({
+      address: CERT_REGISTRY_ADDRESS,
+      fromBlock: 0,
+      toBlock: "latest",
+      topics: [topic0, farmerTopic],
+    })
+
+    if (!logs || logs.length === 0) return null
+    const last = logs[logs.length - 1]
+    const parsed = iface.decodeEventLog(
+      "CertificationGranted",
+      last.data,
+      last.topics,
+    ) as unknown as { farmer: string; certifier: string; expiryDate: bigint }
+
+    return {
+      certifier: parsed.certifier,
+      txHash: last.transactionHash,
+      blockNumber: last.blockNumber,
+    }
+  } catch (error) {
+    console.error("Error getting certification grant event:", error)
     return null
   }
 }
