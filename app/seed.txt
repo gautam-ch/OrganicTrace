@@ -1,2 +1,0 @@
-CERTIFIER_ADDRESS=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 npx hardhat run scripts/add-certifier.ts --network localhost
-
