@@ -16,6 +16,7 @@ import { CERT_REGISTRY_ADDRESS, PRODUCT_TRACKER_ADDRESS, CertificationRegistryAB
 
 export default function ProcessorDashboard({ user, profile }) {
   const [receivedProducts, setReceivedProducts] = useState([])
+  const [processedProducts, setProcessedProducts] = useState([])
   const [certifications, setCertifications] = useState([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -37,7 +38,11 @@ export default function ProcessorDashboard({ user, profile }) {
     const fetchData = async () => {
       try {
         // 1) Fetch products assigned by user id
-        const { data: byUser } = await supabase.from("products").select("*").eq("current_owner_id", user.id)
+        const { data: byUser } = await supabase
+          .from("products")
+          .select("*")
+          .eq("current_owner_id", user.id)
+          .neq("status", "processed")
 
         // 2) Also fetch any unclaimed transfers that match this user's wallet
         let byWallet = []
@@ -47,6 +52,7 @@ export default function ProcessorDashboard({ user, profile }) {
             .select("*")
             .is("current_owner_id", null)
             .eq("current_owner_address", walletAddress)
+            .neq("status", "processed")
           byWallet = byAddr || []
 
           // Optional backfill: claim these to the logged-in user for persistence
@@ -71,6 +77,15 @@ export default function ProcessorDashboard({ user, profile }) {
         const merged = [...(byUser || []), ...byWallet]
         const unique = Array.from(new Map(merged.map((p) => [p.id, p])).values())
         setReceivedProducts(unique)
+
+        // 3) Fetch products processed/created by this processor (child products)
+        const { data: processed } = await supabase
+          .from("products")
+          .select("*")
+          .eq("farmer_id", user.id)
+          .eq("status", "processed")
+          .order("updated_at", { ascending: false })
+        setProcessedProducts(processed || [])
         setCertifications(certsData || [])
       } catch (err) {
         console.error("[v0] Error fetching processor data:", err)
@@ -123,8 +138,17 @@ export default function ProcessorDashboard({ user, profile }) {
         // Mark parent product as processed locally
         await supabase.from("products").update({ status: "processed" }).eq("id", active.id)
 
-        // Refresh received list (remove processed parent, optionally add child if desired)
+        // Refresh received list (remove processed parent)
         setReceivedProducts((prev) => prev.filter((p) => p.id !== active.id))
+
+        // Refresh processed list
+        const { data: processed } = await supabase
+          .from("products")
+          .select("*")
+          .eq("farmer_id", me.id)
+          .eq("status", "processed")
+          .order("updated_at", { ascending: false })
+        setProcessedProducts(processed || [])
       } catch (e) {
         // Non-blocking UI error; log for devs
         console.error("persist processed product error:", e)
@@ -290,7 +314,7 @@ export default function ProcessorDashboard({ user, profile }) {
                 </div>
                 <div className="flex items-center gap-2 mb-3">
                   {/* Process button only when we have an on-chain parent id */}
-                  {product.product_id_onchain ? (
+                  {product.product_id_onchain && product.status !== "processed" ? (
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setActive(product)}>
@@ -349,6 +373,45 @@ export default function ProcessorDashboard({ user, profile }) {
         ) : (
           <Card className="p-8 text-center">
             <p className="text-muted-foreground">No products received yet</p>
+          </Card>
+        )}
+      </section>
+
+      {/* Processed Products Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+        <h2 className="text-2xl font-bold mb-6">Processed Products</h2>
+
+        {loading ? (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">Loading...</p>
+          </Card>
+        ) : processedProducts.length > 0 ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            {processedProducts.map((product) => (
+              <Card key={product.id || product.product_id_onchain} className="p-6 border border-border hover:border-primary transition-colors">
+                <h3 className="font-semibold text-lg mb-2">{product.product_name}</h3>
+                <div className="space-y-2 text-sm mb-4">
+                  <p>
+                    <span className="text-muted-foreground">Type:</span> {product.product_type || "—"}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Status:</span> {product.status}
+                  </p>
+                  {product.product_id_onchain && (
+                    <p className="text-xs text-muted-foreground">On-Chain ID: #{product.product_id_onchain}</p>
+                  )}
+                </div>
+                <Link href={`/product/${product.id ?? product.product_id_onchain}`}>
+                  <Button variant="outline" size="sm" className="w-full bg-transparent">
+                    View Details
+                  </Button>
+                </Link>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">No processed products yet</p>
           </Card>
         )}
       </section>
