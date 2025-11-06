@@ -96,11 +96,14 @@ contract ProductTracker {
     product.parentProductId = _parentProductId;
     product.createdAt = block.timestamp;
 
+    // Determine initial action: base products are "Harvested", derived products are "Processed"
+    string memory initialAction = _parentProductId == 0 ? "Harvested" : "Processed";
+
     // Log the creation event
     product.historyLog.push(
       HistoryEntry({
         actor: msg.sender,
-        action: "Harvested",
+        action: initialAction,
         timestamp: block.timestamp,
         details: _details
       })
@@ -151,6 +154,7 @@ contract ProductTracker {
       address farmer,
       address currentOwner,
       string memory productName,
+      uint256 parentProductId,
       uint256 createdAt,
       HistoryEntry[] memory history
     )
@@ -161,6 +165,7 @@ contract ProductTracker {
       product.farmer,
       product.currentOwner,
       product.productName,
+      product.parentProductId,
       product.createdAt,
       product.historyLog
     );

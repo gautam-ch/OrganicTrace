@@ -14,13 +14,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params
 
     // Basic env checks to provide clearer errors during setup
-    if (!process.env.PRODUCT_TRACKER_ADDRESS) {
+    const resolvedProductTracker =
+      process.env.NEXT_PUBLIC_PRODUCT_TRACKER_ADDRESS || process.env.PRODUCT_TRACKER_ADDRESS
+    if (!resolvedProductTracker) {
       return NextResponse.json(
         { error: "Server env PRODUCT_TRACKER_ADDRESS is not set. Deploy contracts and set .env.local/.env" },
         { status: 500 },
       )
     }
-    if (!process.env.CERT_REGISTRY_ADDRESS) {
+    const resolvedCertRegistry =
+      process.env.NEXT_PUBLIC_CERT_REGISTRY_ADDRESS || process.env.CERT_REGISTRY_ADDRESS
+    if (!resolvedCertRegistry) {
       return NextResponse.json(
         { error: "Server env CERT_REGISTRY_ADDRESS is not set. Deploy contracts and set .env.local/.env" },
         { status: 500 },
@@ -200,7 +204,81 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Format response with readable data, including optional names
+    // Build a stitched master journey: parent's history (if any) + child's
+    let stitchedHistory: Array<{
+      action: string
+      actor: string
+      timestamp: string
+      details: string
+      productId: string
+      productName: string
+    }>
+    let parentInfo: null | { id: string; name: string } = null
+
+    // Prefer on-chain parent id; fall back to inferring from the child's first event details JSON
+    let parentIdStr: string = productData.parentProductId || "0"
+    if (parentIdStr === "0" && Array.isArray(productData.history) && productData.history.length > 0) {
+      try {
+        const maybe = JSON.parse(productData.history[0].details || "null")
+        const inferred = maybe?.parent_product_id ?? maybe?.parentProductId
+        if (typeof inferred === "number" || (typeof inferred === "string" && /^\d+$/.test(inferred))) {
+          parentIdStr = String(inferred)
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (parentIdStr !== "0") {
+      const parentData = await getProductDetails(Number(parentIdStr))
+      if (parentData) {
+        parentInfo = { id: parentData.productId, name: parentData.productName }
+        const parentHist = parentData.history.map((entry: any) => ({
+          action: entry.action,
+          actor: formatAddress(entry.actor),
+          timestamp: formatDate(entry.timestamp),
+          details: entry.details,
+          productId: parentData.productId,
+          productName: parentData.productName,
+        }))
+        let childHist: Array<{ action: string; actor: string; timestamp: string; details: string; productId: string; productName: string }>
+          = productData.history.map((entry: any) => ({
+          action: entry.action,
+          actor: formatAddress(entry.actor),
+          timestamp: formatDate(entry.timestamp),
+          details: entry.details,
+          productId: productData.productId,
+          productName: productData.productName,
+        }))
+        // Backward compatibility: if child creation was recorded as "Harvested" while having a parent, relabel it to "Processed"
+        childHist = childHist.map((e: any, idx: number) =>
+          idx === 0 && typeof e.action === "string" && e.action.toLowerCase().startsWith("harvested")
+            ? { ...e, action: "Processed" }
+            : e,
+        )
+        stitchedHistory = [...parentHist, ...childHist]
+      } else {
+        stitchedHistory = productData.history.map((entry: any) => ({
+          action: entry.action,
+          actor: formatAddress(entry.actor),
+          timestamp: formatDate(entry.timestamp),
+          details: entry.details,
+          productId: productData.productId,
+          productName: productData.productName,
+        }))
+      }
+    } else {
+      stitchedHistory = productData.history.map((entry: any) => ({
+        action: entry.action,
+        actor: formatAddress(entry.actor),
+        timestamp: formatDate(entry.timestamp),
+        details: entry.details,
+        productId: productData.productId,
+        productName: productData.productName,
+      }))
+    }
+
+    // Format response with readable data, including optional names and parent references
     const response = {
       product: {
         id: productData.productId,
@@ -214,13 +292,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         createdAt: formatDate(productData.createdAt),
         isFarmerCertified: isCertified,
         certification,
+        parentProductId: productData.parentProductId,
+        parent: parentInfo,
       },
-      history: productData.history.map((entry: any) => ({
-        action: entry.action,
-        actor: formatAddress(entry.actor),
-        timestamp: formatDate(entry.timestamp),
-        details: entry.details,
-      })),
+      history: stitchedHistory,
     }
 
     return NextResponse.json(response)

@@ -22,22 +22,42 @@ async function main() {
   const REGISTRY_ADDRESS =
     registryArg ||
     process.env.NEXT_PUBLIC_CERT_REGISTRY_ADDRESS ||
-    process.env.CERT_REGISTRY_ADDRESS ||
-    "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    process.env.CERT_REGISTRY_ADDRESS || '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707'
 
   const CERTIFIER_ADDRESS = certifierArg
 
+  const network = await ethers.provider.getNetwork()
   console.log("\n🔧 Adding certifier")
+  console.log("Network:", `${network.name} (chainId=${network.chainId})`)
   console.log("Registry:", REGISTRY_ADDRESS)
   console.log("Certifier:", CERTIFIER_ADDRESS)
 
   const [admin] = await ethers.getSigners()
   console.log("Admin (tx sender):", admin.address)
 
+  // Sanity check: ensure there is contract code at the provided address
+  const code = await ethers.provider.getCode(REGISTRY_ADDRESS)
+  if (!code || code === "0x") {
+    throw new Error(
+      `No contract code found at ${REGISTRY_ADDRESS} on ${network.name} (chainId=${network.chainId}).\n` +
+        `Make sure you've deployed CertificationRegistry to this network and are using the correct address.\n\n` +
+        `Tip:\n` +
+        `  1) Start a local node:   npm run hardhat:node\n` +
+        `  2) Deploy locally:       npm run hardhat:deploy:local\n` +
+        `  3) Use the printed CERT_REGISTRY_ADDRESS here (env or CLI arg).`
+    )
+  }
+
   const registry = await ethers.getContractAt("CertificationRegistry", REGISTRY_ADDRESS)
 
-  const adminOnChain = await registry.admin()
-  if (adminOnChain.toLowerCase() !== admin.address.toLowerCase()) {
+  let adminOnChain: string | undefined
+  try {
+    adminOnChain = await registry.admin()
+  } catch (e) {
+    console.warn("⚠️  Could not read admin() from CertificationRegistry. The ABI or address may be incorrect.")
+    throw e
+  }
+  if (adminOnChain && adminOnChain.toLowerCase() !== admin.address.toLowerCase()) {
     console.warn("⚠️  Current signer is not the admin on-chain. Transaction may revert.")
   }
 

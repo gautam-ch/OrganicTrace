@@ -38,8 +38,8 @@
       ]
     },
     "D:\\OrganiTrace\\contracts\\ProductTracker.sol": {
-      "lastModificationDate": 1762200136284,
-      "contentHash": "55af98a524050d4c8e74e4ee1fb584ba",
+      "lastModificationDate": 1762429296447,
+      "contentHash": "4d58c36743b1b777ca4a2cae870ec8a2",
       "sourceName": "contracts/ProductTracker.sol",
       "solcConfig": {
         "version": "0.8.20",

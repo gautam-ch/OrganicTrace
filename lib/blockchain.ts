@@ -10,14 +10,28 @@ const CERT_REGISTRY_ABI = [
 
 // ABI for ProductTracker contract
 const PRODUCT_TRACKER_ABI = [
-  "function getProduct(uint256 _productId) public view returns (uint256 productId, address farmer, address currentOwner, string memory productName, uint256 createdAt, tuple(address actor, string action, uint256 timestamp, string details)[] memory history)",
+  "function getProduct(uint256 _productId) public view returns (uint256 productId, address farmer, address currentOwner, string memory productName, uint256 parentProductId, uint256 createdAt, tuple(address actor, string action, uint256 timestamp, string details)[] memory history)",
   "function getHistoryLength(uint256 _productId) public view returns (uint256)",
   "function getHistoryEntry(uint256 _productId, uint256 _index) public view returns (address actor, string memory action, uint256 timestamp, string memory details)",
 ]
 
-const RPC_URL = process.env.ETHEREUM_RPC_URL || "https://sepolia.infura.io/v3/YOUR_INFURA_KEY"
-const CERT_REGISTRY_ADDRESS = process.env.CERT_REGISTRY_ADDRESS || ""
-const PRODUCT_TRACKER_ADDRESS = process.env.PRODUCT_TRACKER_ADDRESS || ""
+// Prefer server envs; fall back to NEXT_PUBLIC_* so local dev works even if server vars are missing
+const RPC_URL =
+  process.env.ETHEREUM_RPC_URL ||
+  process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL ||
+  // Default to local node to make local dev Just Work
+  "http://127.0.0.1:8545"
+
+// In dev, prefer NEXT_PUBLIC_* (used by the client) to avoid stale server-only envs during rapid redeploys
+const devPreferPublic = (process.env.NODE_ENV || "development") !== "production"
+
+const CERT_REGISTRY_ADDRESS = devPreferPublic
+  ? process.env.NEXT_PUBLIC_CERT_REGISTRY_ADDRESS || process.env.CERT_REGISTRY_ADDRESS || ""
+  : process.env.CERT_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_CERT_REGISTRY_ADDRESS || ""
+
+const PRODUCT_TRACKER_ADDRESS = devPreferPublic
+  ? process.env.NEXT_PUBLIC_PRODUCT_TRACKER_ADDRESS || process.env.PRODUCT_TRACKER_ADDRESS || ""
+  : process.env.PRODUCT_TRACKER_ADDRESS || process.env.NEXT_PUBLIC_PRODUCT_TRACKER_ADDRESS || ""
 
 // Create a provider
 const provider = new ethers.JsonRpcProvider(RPC_URL)
@@ -110,13 +124,14 @@ export async function getCertificationGrantProof(farmerAddress: string) {
 export async function getProductDetails(productId: number) {
   try {
     const contract = getProductTracker()
-    const [productIdBN, farmer, currentOwner, productName, createdAt, history] = await contract.getProduct(productId)
+    const [productIdBN, farmer, currentOwner, productName, parentProductId, createdAt, history] = await contract.getProduct(productId)
 
     return {
       productId: productIdBN.toString(),
       farmer,
       currentOwner,
       productName,
+      parentProductId: parentProductId.toString(),
       createdAt: createdAt.toString(),
       history: history.map((entry: any) => ({
         actor: entry.actor,
