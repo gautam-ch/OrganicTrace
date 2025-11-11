@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { isAddress } from "viem"
+import { apiError, apiSuccess } from "@/lib/api/errors"
 
 // Baseline wallet-first product creation (no signature yet)
 // Expects body with: walletAddress, product_name, product_sku, product_type, (optional) description, farming_practices, harvest_date (YYYY-MM-DD), certification_id
@@ -19,19 +20,19 @@ export async function POST(request: NextRequest) {
   const certification_id: string | null = body.certification_id ? String(body.certification_id).trim() : null
 
     // Basic validations
-    if (!walletAddress) return NextResponse.json({ error: "walletAddress is required" }, { status: 400 })
-    if (!isAddress(walletAddress)) return NextResponse.json({ error: "walletAddress is not a valid Ethereum address" }, { status: 400 })
-    if (!product_name) return NextResponse.json({ error: "product_name is required" }, { status: 400 })
-    if (!product_sku) return NextResponse.json({ error: "product_sku is required" }, { status: 400 })
-  if (!product_type) return NextResponse.json({ error: "product_type is required" }, { status: 400 })
-  if (!certification_id) return NextResponse.json({ error: "certification_id is required" }, { status: 400 })
+    if (!walletAddress) return apiError(400, "Wallet address is required.", { code: "WALLET_REQUIRED", field: "walletAddress" })
+    if (!isAddress(walletAddress)) return apiError(400, "Invalid wallet address.", { code: "INVALID_ADDRESS", field: "walletAddress" })
+    if (!product_name) return apiError(400, "Product name is required.", { code: "PRODUCT_NAME_REQUIRED", field: "product_name" })
+    if (!product_sku) return apiError(400, "Product SKU is required.", { code: "PRODUCT_SKU_REQUIRED", field: "product_sku" })
+  if (!product_type) return apiError(400, "Product type is required.", { code: "PRODUCT_TYPE_REQUIRED", field: "product_type" })
+  if (!certification_id) return apiError(400, "Certification is required.", { code: "CERTIFICATION_REQUIRED", field: "certification_id" })
 
     // Validate harvest date format if provided
     let harvest_date: string | null = null
     if (harvest_date_raw) {
       const d = new Date(harvest_date_raw)
       if (isNaN(d.getTime())) {
-        return NextResponse.json({ error: "harvest_date is invalid date" }, { status: 400 })
+        return apiError(400, "Harvest date is invalid.", { code: "INVALID_DATE", field: "harvest_date" })
       }
       harvest_date = d.toISOString().slice(0, 10) // normalize to YYYY-MM-DD
     }
@@ -42,9 +43,12 @@ export async function POST(request: NextRequest) {
       .select("id, role, wallet_address")
       .ilike("wallet_address", walletAddress)
       .maybeSingle()
-    if (profileError) return NextResponse.json({ error: profileError.message }, { status: 400 })
-    if (!profile) return NextResponse.json({ error: "Profile not found for wallet" }, { status: 401 })
-    if (profile.role !== "farmer") return NextResponse.json({ error: "Role 'farmer' required" }, { status: 403 })
+    if (profileError) {
+      console.error("[product/create] profile lookup error", profileError)
+      return apiError(400, "Couldn't look up profile.", { code: "PROFILE_LOOKUP_FAILED" })
+    }
+    if (!profile) return apiError(401, "No profile found for this wallet.", { code: "PROFILE_REQUIRED" })
+    if (profile.role !== "farmer") return apiError(403, "Only farmers can create products.", { code: "ROLE_FORBIDDEN" })
 
     // Required certification check: must belong to this farmer and be currently valid/verified
     const { data: cert, error: certErr } = await supabase
@@ -53,8 +57,11 @@ export async function POST(request: NextRequest) {
       .eq("id", certification_id)
       .eq("user_id", profile.id)
       .maybeSingle()
-    if (certErr) return NextResponse.json({ error: certErr.message }, { status: 400 })
-    if (!cert) return NextResponse.json({ error: "certification_id not found for this farmer" }, { status: 403 })
+    if (certErr) {
+      console.error("[product/create] certification lookup error", certErr)
+      return apiError(400, "Couldn't verify certification.", { code: "CERT_LOOKUP_FAILED" })
+    }
+    if (!cert) return apiError(403, "Certification not found for this profile.", { code: "CERT_NOT_FOUND" })
     // Verify certification status and validity window
     const today = new Date()
     const from = new Date(String((cert as any).valid_from))
@@ -62,7 +69,7 @@ export async function POST(request: NextRequest) {
     const isVerified = (cert as any).verified === true
     const inWindow = !isNaN(from.getTime()) && !isNaN(until.getTime()) && from.getTime() <= today.getTime() && today.getTime() <= until.getTime()
     if (!isVerified || !inWindow) {
-      return NextResponse.json({ error: "A valid, verified certification is required to create products" }, { status: 403 })
+      return apiError(403, "Your certification is unverified or expired.", { code: "CERT_INVALID" })
     }
 
     // Insert product with farmer as current owner
@@ -85,14 +92,15 @@ export async function POST(request: NextRequest) {
     if (error) {
       // Map unique constraint error (SKU) to 409 if detected
       if (/duplicate key value/.test(error.message) && /products_farmer_id_product_sku_key/.test(error.message)) {
-        return NextResponse.json({ error: "SKU already exists for this farmer", code: "SKU_CONFLICT" }, { status: 409 })
+        return apiError(409, "You already have a product with that SKU.", { code: "SKU_CONFLICT", field: "product_sku" })
       }
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("[product/create] insert error", error)
+      return apiError(400, "We couldn't create the product.", { code: "CREATE_FAILED" })
     }
 
-    return NextResponse.json({ product: data }, { status: 201 })
+    return apiSuccess(201, { product: data })
   } catch (err) {
     console.error("[product] create error:", err)
-    return NextResponse.json({ error: "Failed to create product" }, { status: 500 })
+    return apiError(500, "Unexpected error creating product.", { code: "UNEXPECTED" })
   }
 }

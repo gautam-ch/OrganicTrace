@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiError, apiSuccess } from "@/lib/api/errors"
 
 type Body = {
   walletAddress?: string
@@ -25,13 +26,17 @@ export async function POST(request: Request) {
   const role = (body.role || "").trim().toLowerCase()
 
   if (!wallet) {
-    return NextResponse.json({ error: "walletAddress is required" }, { status: 400 })
+    return apiError(400, "Please connect your wallet first.", { code: "WALLET_REQUIRED", field: "walletAddress" })
   }
   if (!name) {
-    return NextResponse.json({ error: "fullName is required" }, { status: 400 })
+    return apiError(400, "Please enter your full name.", { code: "FULL_NAME_REQUIRED", field: "fullName" })
   }
   if (!ROLES.has(role as any)) {
-    return NextResponse.json({ error: "role must be farmer, processor, or consumer" }, { status: 400 })
+    return apiError(400, "Invalid role selected.", {
+      code: "INVALID_ROLE",
+      field: "role",
+      hint: "Choose one of: farmer, processor, consumer",
+    })
   }
 
   try {
@@ -46,10 +51,11 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (findErr) {
-      return NextResponse.json({ error: findErr.message }, { status: 400 })
+      console.error("[profile/create] find existing error", findErr)
+      return apiError(400, "Unable to check existing profile right now.", { code: "LOOKUP_FAILED" })
     }
     if (existing) {
-      return NextResponse.json({ error: "Profile already exists" }, { status: 409 })
+      return apiError(409, "A profile already exists for this wallet.", { code: "PROFILE_EXISTS" })
     }
 
     const { data, error } = await supabase
@@ -59,12 +65,13 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("[profile/create] insert error", error)
+      return apiError(400, "We couldn't create your profile.", { code: "CREATE_FAILED" })
     }
 
-    return NextResponse.json({ profile: data }, { status: 201 })
+    return apiSuccess(201, { profile: data })
   } catch (err) {
-    console.error("[api] profile/create error:", err)
-    return NextResponse.json({ error: "Failed to create profile" }, { status: 500 })
+    console.error("[api] profile/create unhandled error:", err)
+    return apiError(500, "Unexpected error creating profile.", { code: "UNEXPECTED" })
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiError, apiSuccess } from "@/lib/api/errors"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -7,7 +8,7 @@ export async function GET(request: Request) {
 
   const wallet = addr.trim()
   if (!wallet) {
-    return NextResponse.json({ error: "address is required" }, { status: 400 })
+    return apiError(400, "Wallet address is required.", { code: "WALLET_REQUIRED", field: "address" })
   }
 
   try {
@@ -19,16 +20,17 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("[profile/me] query error", error)
+      return apiError(400, "Couldn't look up the profile.", { code: "LOOKUP_FAILED" })
     }
 
     if (!data) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 })
+      return apiError(404, "No profile found for that wallet.", { code: "NOT_FOUND" })
     }
 
-    return NextResponse.json({ profile: data })
+    return apiSuccess(200, { profile: data })
   } catch (err) {
-    console.error("[api] profile/me error:", err)
-    return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 })
+    console.error("[api] profile/me unhandled error:", err)
+    return apiError(500, "Unexpected error fetching profile.", { code: "UNEXPECTED" })
   }
 }
