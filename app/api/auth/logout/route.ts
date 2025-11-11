@@ -1,14 +1,6 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
+// Wallet-first auth: logout handled client-side via wagmi disconnect
 export async function POST() {
-  try {
-    const supabase = await createClient()
-    await supabase.auth.signOut()
-
-    return NextResponse.json({ message: "Logged out successfully" }, { status: 200 })
-  } catch (error) {
-    console.error("[v0] Logout error:", error)
-    return NextResponse.json({ error: "Logout failed" }, { status: 500 })
-  }
+  return NextResponse.json({ error: "Deprecated. Use wallet disconnect()." }, { status: 410 })
 }

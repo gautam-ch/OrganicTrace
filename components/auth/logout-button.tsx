@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
+import { useDisconnect } from "wagmi"
 
 type Props = {
   className?: string
@@ -11,16 +11,12 @@ type Props = {
 }
 
 export default function LogoutButton({ className, variant = "outline", size = "sm", label = "Logout" }: Props) {
-  const supabase = createClient()
+  const { disconnect } = useDisconnect()
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-    } finally {
-      // Refresh current page so server components re-render without session
-      if (typeof window !== "undefined") {
-        window.location.href = "/"
-      }
+  const handleLogout = () => {
+    disconnect()
+    if (typeof window !== "undefined") {
+      window.location.href = "/"
     }
   }
 

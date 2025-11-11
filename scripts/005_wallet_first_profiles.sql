@@ -85,6 +85,9 @@ BEGIN
 
   -- Normalize any accidental uppercase/mixed roles back to lowercase for consistency
   UPDATE public.profiles SET role = LOWER(role) WHERE role IS NOT NULL AND role <> LOWER(role);
+
+  -- Ensure id column has a default to support wallet-first inserts
+  ALTER TABLE public.profiles ALTER COLUMN id SET DEFAULT uuid_generate_v4();
 END $$;
 
 -- Update trigger for updated_at if not present

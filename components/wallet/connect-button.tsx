@@ -5,6 +5,8 @@ import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain, useR
 import { useRouter, usePathname } from "next/navigation"
 import { CertificationRegistryABI, CERT_REGISTRY_ADDRESS } from "@/lib/contracts.js"
 import { Button } from "@/components/ui/button"
+import CreateProfileModal from "@/components/auth/create-profile-modal"
+import { useProfile } from "@/components/auth/profile-context"
 
 function short(addr: string) {
   return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ""
@@ -77,6 +79,8 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
     return error
   }, [error])
 
+  const { needsSignup } = useProfile()
+
   return (
     <div className={containerClass}>
       {!isConnected ? (
@@ -110,6 +114,7 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
       {displayError && !isConnected && (
         <span className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">{displayError.message}</span>
       )}
+      {isConnected && needsSignup && <CreateProfileModal />}
     </div>
   )
 }

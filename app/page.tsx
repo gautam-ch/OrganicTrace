@@ -1,15 +1,12 @@
+"use client"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import ConnectButton from "@/components/wallet/connect-button"
-import LogoutButton from "@/components/auth/logout-button"
-import { createClient } from "@/lib/supabase/server"
+import { useProfile } from "@/components/auth/profile-context"
 
-export default async function Home() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function Home() {
+  const { profile } = useProfile()
   return (
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
       {/* Navigation */}
@@ -23,21 +20,15 @@ export default async function Home() {
           </div>
           <div className="flex gap-3 items-center">
             <ConnectButton fixed={false} />
-            {user ? (
+            {profile ? (
               <>
                 <Link href="/dashboard">
                   <Button variant="outline">Dashboard</Button>
                 </Link>
-                <LogoutButton />
               </>
             ) : (
               <>
-                <Link href="/auth/login">
-                  <Button variant="outline">Login</Button>
-                </Link>
-                <Link href="/auth/signup">
-                  <Button className="bg-primary hover:bg-primary/90">Register</Button>
-                </Link>
+                {/* Wallet-first: prompting connect via ConnectButton */}
               </>
             )}
           </div>
@@ -53,11 +44,14 @@ export default async function Home() {
             step, verified and secure.
           </p>
           <div className="flex gap-4 justify-center pt-4">
-            <Link href="/auth/signup">
-              <Button size="lg" className="bg-primary hover:bg-primary/90">
-                Get Started
-              </Button>
-            </Link>
+            {!profile && <ConnectButton fixed={false} />}
+            {profile && (
+              <Link href="/dashboard">
+                <Button size="lg" className="bg-primary hover:bg-primary/90">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            )}
             <Link href="/product">
               <Button size="lg" variant="outline">
                 Scan Product
@@ -81,11 +75,7 @@ export default async function Home() {
               Register your organic certification and create digital passports for each product batch. Prove your
               compliance on the blockchain.
             </p>
-            <Link href="/auth/signup">
-              <Button variant="outline" className="w-full bg-transparent">
-                Get Started as Farmer
-              </Button>
-            </Link>
+            {!profile && <ConnectButton fixed={false} />}
           </Card>
 
           {/* Feature 2 */}
@@ -98,11 +88,7 @@ export default async function Home() {
               Track incoming products and maintain chain of custody. Transfer products with verifiable details at each
               step.
             </p>
-            <Link href="/auth/signup">
-              <Button variant="outline" className="w-full bg-transparent">
-                Register as Processor
-              </Button>
-            </Link>
+            {!profile && <ConnectButton fixed={false} />}
           </Card>
 
           {/* Feature 3 */}

@@ -25,22 +25,8 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/certifier-dashboard") ||
-    request.nextUrl.pathname.startsWith("/product/create") ||
-    request.nextUrl.pathname.startsWith("/product/transfer")
-  ) {
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/auth/login"
-      return NextResponse.redirect(url)
-    }
-  }
+  // Wallet-first: no server-side redirect gating via Supabase.
+  // Client will handle access based on wallet/profile context.
 
   return supabaseResponse
 }
