@@ -1,31 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiError, apiSuccess } from "@/lib/api/errors"
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await request.json().catch(() => ({}))
-    const address = typeof body?.address === "string" ? body.address : null
-    if (!address) {
-      return NextResponse.json({ error: "Missing address" }, { status: 400 })
-    }
+    const { walletAddress, profileId } = body || {}
 
-    const { error } = await supabase.from("profiles").update({ wallet_address: address }).eq("id", user.id)
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    if (!walletAddress) return apiError(400, "Wallet address is required.", { code: "WALLET_REQUIRED", field: "walletAddress" })
+    if (!profileId) return apiError(400, "Profile id is required.", { code: "PROFILE_ID_REQUIRED", field: "profileId" })
 
-    return NextResponse.json({ ok: true })
+    // Ensure profile exists & matches provided id
+    const { data: profile, error: profErr } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", profileId)
+      .maybeSingle()
+
+    if (profErr) return apiError(400, "Couldn't look up profile.", { code: "PROFILE_LOOKUP_FAILED" })
+    if (!profile) return apiError(404, "Profile not found.", { code: "NOT_FOUND" })
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ wallet_address: String(walletAddress).toLowerCase() })
+      .eq("id", profileId)
+
+    if (error) return apiError(400, "Failed to update wallet address.", { code: "UPDATE_FAILED" })
+
+    return apiSuccess(200, { ok: true })
   } catch (err) {
     console.error("[api] wallet save error:", err)
-    return NextResponse.json({ error: "Failed to save wallet" }, { status: 500 })
+    return apiError(500, "Unexpected error updating wallet.")
   }
 }

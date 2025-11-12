@@ -17,15 +17,28 @@ export async function POST(request: NextRequest) {
     const description: string | null = body.description ? String(body.description).trim() : null
     const farming_practices: string | null = body.farming_practices ? String(body.farming_practices).trim() : null
     const harvest_date_raw: string | null = body.harvest_date ? String(body.harvest_date).trim() : null
-  const certification_id: string | null = body.certification_id ? String(body.certification_id).trim() : null
+    const certification_id: string | null = body.certification_id ? String(body.certification_id).trim() : null
+    const product_id_onchain_raw = body.product_id_onchain
+    const blockchain_hash: string | null = body.blockchain_hash ? String(body.blockchain_hash).trim() : null
+    const last_tx_hash: string | null = body.last_tx_hash ? String(body.last_tx_hash).trim() : null
 
     // Basic validations
     if (!walletAddress) return apiError(400, "Wallet address is required.", { code: "WALLET_REQUIRED", field: "walletAddress" })
     if (!isAddress(walletAddress)) return apiError(400, "Invalid wallet address.", { code: "INVALID_ADDRESS", field: "walletAddress" })
     if (!product_name) return apiError(400, "Product name is required.", { code: "PRODUCT_NAME_REQUIRED", field: "product_name" })
     if (!product_sku) return apiError(400, "Product SKU is required.", { code: "PRODUCT_SKU_REQUIRED", field: "product_sku" })
-  if (!product_type) return apiError(400, "Product type is required.", { code: "PRODUCT_TYPE_REQUIRED", field: "product_type" })
-  if (!certification_id) return apiError(400, "Certification is required.", { code: "CERTIFICATION_REQUIRED", field: "certification_id" })
+    if (!product_type) return apiError(400, "Product type is required.", { code: "PRODUCT_TYPE_REQUIRED", field: "product_type" })
+    if (!certification_id) return apiError(400, "Certification is required.", { code: "CERTIFICATION_REQUIRED", field: "certification_id" })
+
+    // Optional product_id_onchain validation
+    let product_id_onchain: number | null = null
+    if (product_id_onchain_raw !== undefined && product_id_onchain_raw !== null && product_id_onchain_raw !== "") {
+      const parsed = Number(product_id_onchain_raw)
+      if (!Number.isFinite(parsed)) {
+        return apiError(400, "product_id_onchain must be a number.", { code: "INVALID_PRODUCT_ID", field: "product_id_onchain" })
+      }
+      product_id_onchain = parsed
+    }
 
     // Validate harvest date format if provided
     let harvest_date: string | null = null
@@ -49,6 +62,24 @@ export async function POST(request: NextRequest) {
     }
     if (!profile) return apiError(401, "No profile found for this wallet.", { code: "PROFILE_REQUIRED" })
     if (profile.role !== "farmer") return apiError(403, "Only farmers can create products.", { code: "ROLE_FORBIDDEN" })
+
+    // Sanity check: ensure profile id truly exists in the active DB
+    if (profile?.id) {
+      const { data: sanity, error: sanityErr } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", profile.id)
+        .maybeSingle()
+      if (sanityErr) {
+        console.error("[product/create] profile sanity check error", sanityErr)
+      }
+      if (!sanity) {
+        return apiError(409, "Profile not found in active database.", {
+          code: "PROFILE_ID_NOT_FOUND",
+          hint: "Ensure you're connected to the same database where the profile was created and migrations 005-007 have been applied.",
+        })
+      }
+    }
 
     // Required certification check: must belong to this farmer and be currently valid/verified
     const { data: cert, error: certErr } = await supabase
@@ -85,6 +116,9 @@ export async function POST(request: NextRequest) {
       current_owner_id: profile.id,
       current_owner_address: walletAddress.toLowerCase(),
       status: "created",
+      product_id_onchain,
+      blockchain_hash,
+      last_tx_hash,
     }
 
     const { data, error } = await supabase.from("products").insert([insertPayload]).select().single()
@@ -93,6 +127,18 @@ export async function POST(request: NextRequest) {
       // Map unique constraint error (SKU) to 409 if detected
       if (/duplicate key value/.test(error.message) && /products_farmer_id_product_sku_key/.test(error.message)) {
         return apiError(409, "You already have a product with that SKU.", { code: "SKU_CONFLICT", field: "product_sku" })
+      }
+      if (/duplicate key value/.test(error.message) && /product_id_onchain/i.test(error.message)) {
+        return apiError(409, "This on-chain product has already been synced.", { code: "PRODUCT_ONCHAIN_CONFLICT", field: "product_id_onchain" })
+      }
+      if ((error as any)?.code === "23503") {
+        const raw = `${(error as any)?.message || ""} ${(error as any)?.details || ""}`
+        if (/products.*farmer_id.*profiles/i.test(raw)) {
+          return apiError(409, "Profile reference failed integrity check.", {
+            code: "PROFILE_FK_VIOLATION",
+            hint: `The referenced profile id ${profile?.id || "<unknown>"} was not found in public.profiles. Verify the profile exists and the app points to the same DB.`,
+          })
+        }
       }
       console.error("[product/create] insert error", error)
       return apiError(400, "We couldn't create the product.", { code: "CREATE_FAILED" })

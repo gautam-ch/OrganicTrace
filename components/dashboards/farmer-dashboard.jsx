@@ -32,21 +32,32 @@ export default function FarmerDashboard({ user, profile }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch farmer's products
+        // Fetch products created by this farmer profile
         const { data: productsData } = await supabase.from("products").select("*").eq("farmer_id", user.id)
 
-        // Fetch farmer's approved certification requests
-        const { data: certsData } = await supabase
-          .from("certification_requests")
-          .select("*")
-          .eq("farmer_id", user.id)
-          .eq("status", "approved")
-          .order("updated_at", { ascending: false })
+        // Fetch verified certifications from certifications table (wallet-first model)
+        const { data: certsData, error: certErr } = await supabase
+          .from("certifications")
+          .select("id, certificate_url, verified, valid_from, valid_until, created_at, updated_at")
+          .eq("user_id", user.id)
+          .eq("verified", true)
+          .order("valid_until", { ascending: false })
+
+        if (certErr) {
+          console.error("[farmer-dashboard] certifications fetch error", certErr)
+        }
 
         setProducts(productsData || [])
-        setCertifications(certsData || [])
+        setCertifications((certsData || []).map(c => ({
+          id: c.id,
+          certification_body: "Organic Certification", // placeholder label
+          document_url: c.certificate_url || null,
+          updated_at: c.updated_at,
+          created_at: c.created_at,
+          expiry_date: c.valid_until,
+        })))
       } catch (err) {
-        console.error("[v0] Error fetching farmer data:", err)
+        console.error("[farmer-dashboard] Error fetching farmer data:", err)
       } finally {
         setLoading(false)
       }
@@ -116,6 +127,7 @@ export default function FarmerDashboard({ user, profile }) {
       if (/Only current owner/i.test(msg)) friendly = "You are not the current owner"
       else if (/invalid address/i.test(msg) || /valid Ethereum address/i.test(msg)) friendly = "Enter a valid Ethereum address"
       else if (/Blockchain not configured/i.test(msg)) friendly = msg
+      else if (/not linked to an on-chain id/i.test(msg)) friendly = "This product is not linked to an on-chain id. Re-sync or recreate the product first."
       setError(friendly)
     }
   }
@@ -141,12 +153,12 @@ export default function FarmerDashboard({ user, profile }) {
         <Card className="p-8 border border-border">
           <div className="grid md:grid-cols-2 gap-8">
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Email</p>
-              <p className="font-medium">{user.email}</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Name</p>
+              <p className="font-medium">{profile?.full_name || "N/A"}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Organization</p>
-              <p className="font-medium">{profile.organization_name || "N/A"}</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Number of Products</p>
+              <p className="font-medium">{products?.length ?? 0}</p>
             </div>
           </div>
         </Card>

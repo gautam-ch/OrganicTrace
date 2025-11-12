@@ -148,7 +148,7 @@ export default function CreateProductPage() {
     run()
   }, [address])
 
-  // Once the transaction is mined, parse the ProductCreated event and sync to Supabase
+  // Once the transaction is mined, parse the ProductCreated event and sync to backend (wallet-first API)
   useEffect(() => {
     const syncIfReady = async () => {
       if (!isMined || !receipt || synced) return
@@ -166,64 +166,70 @@ export default function CreateProductPage() {
           throw new Error("Could not parse productId from transaction logs")
         }
 
-        const supabase = createClient()
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-          setError("Not authenticated")
-          return
+        // Fetch verified certification id for this wallet from our API
+        let certification_id: string | null = null
+        try {
+          const resp = await fetch("/api/certifications/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ walletAddress: address }),
+          })
+          const json = await resp.json()
+          const certs = Array.isArray(json?.certifications) ? json.certifications : Array.isArray(json?.data?.certifications) ? json.data.certifications : []
+          if (json?.success && certs.length > 0) {
+            certs.sort((a: any, b: any) => {
+              const aTime = a?.valid_until ? new Date(a.valid_until).getTime() : 0
+              const bTime = b?.valid_until ? new Date(b.valid_until).getTime() : 0
+              return bTime - aTime
+            })
+            certification_id = certs[0]?.id || null
+          }
+        } catch (verifyErr) {
+          console.error("[create-product] certification fetch failed", verifyErr)
         }
 
-        const { data, error: upsertError } = await supabase
-          .from("products")
-          // Use upsert to make local Hardhat resets/dev id collisions harmless
-          .upsert([
-            {
-              farmer_id: user.id,
-              current_owner_id: user.id,
-              product_name: formData.product_name,
-              product_sku: formData.product_sku,
-              product_type: formData.product_type,
-              description: formData.description,
-              farming_practices: formData.farming_practices,
-              harvest_date: formData.harvest_date || null,
-              status: "created",
-              // On-chain linkage
-              product_id_onchain: Number(productId),
-              last_tx_hash: receipt.transactionHash,
-              current_owner_address: address || null,
-              blockchain_hash: receipt.transactionHash,
-            },
-          ], { onConflict: "product_id_onchain" })
-          .select()
+        if (!certification_id) {
+          throw new Error("No verified certification found for this wallet in the database.")
+        }
 
-        if (upsertError) throw upsertError
+        // Call backend API to create the product (resolves profile by wallet)
+        const resp = await fetch("/api/product", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: address,
+            product_name: formData.product_name,
+            product_sku: formData.product_sku,
+            product_type: formData.product_type,
+            description: formData.description,
+            farming_practices: formData.farming_practices,
+            harvest_date: formData.harvest_date || null,
+            certification_id,
+            product_id_onchain: Number(productId),
+            blockchain_hash: receipt.transactionHash,
+            last_tx_hash: receipt.transactionHash,
+          }),
+        })
+
+        const result = await resp.json()
+        if (!resp.ok || !result?.success) {
+          throw new Error(result?.message || "Failed to create the product")
+        }
 
         setSynced(true)
         setLoading(false)
-        if (data && data[0]) {
-          // Prefer navigating to on-chain product page using productId
-          router.push(`/product/${Number(productId)}`)
-        }
+        // Navigate to on-chain product page using productId
+        router.push(`/product/${Number(productId)}`)
       } catch (e: any) {
         setLoading(false)
         // Extract helpful supabase/Postgres error messages
         const rawMsg = e?.message || e?.error?.message || e?.hint || null
-        let friendly = rawMsg || "Failed to sync product to database"
-
-        // Postgres unique constraint
-        const code = e?.code || e?.details?.code
-        const constraint = e?.details?.constraint || e?.constraint
-        if (code === "23505" || /duplicate key value/i.test(String(rawMsg))) {
-          if (/products_product_sku_key/i.test(String(constraint)) || /product_sku/i.test(String(rawMsg))) {
-            friendly = "Product SKU already exists. Please use a unique SKU."
-          } else if (/product_id_onchain/i.test(String(rawMsg)) || /product_id_onchain/i.test(String(constraint))) {
-            friendly = "A product with the same on-chain id already exists locally. We now upsert on this key; please try again."
-          }
+        let friendly = rawMsg || "Failed to sync product to backend"
+        if (/No verified certification/i.test(String(rawMsg))) {
+          friendly = "No verified certification found in database. Ask a certifier to approve you, then try again."
+        } else if (/Product SKU already exists/i.test(String(rawMsg))) {
+          friendly = rawMsg
         }
-
         setError(friendly)
       }
     }

@@ -1,39 +1,49 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
+import { apiError, apiSuccess } from "@/lib/api/errors"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const body = await request.json().catch(() => ({}))
+    const { walletAddress, to_user_id, to_address, movement_type, location, notes } = body
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!walletAddress) return apiError(400, "Wallet address is required.", { code: "WALLET_REQUIRED", field: "walletAddress" })
+
+    // Resolve actor profile
+    const { data: actor, error: profErr } = await supabase
+      .from("profiles")
+      .select("id,wallet_address")
+      .ilike("wallet_address", walletAddress)
+      .maybeSingle()
+
+    if (profErr) {
+      console.error("[transfer] profile lookup error", profErr)
+      return apiError(400, "Couldn't look up profile.", { code: "PROFILE_LOOKUP_FAILED" })
     }
-
-    const body = await request.json()
-    const { to_user_id, movement_type, location, notes } = body
+    if (!actor) return apiError(401, "No profile found for this wallet.", { code: "PROFILE_REQUIRED" })
 
     // Verify product exists and user owns it
     const { data: product, error: productError } = await supabase.from("products").select("*").eq("id", id).single()
 
     if (productError || !product) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+      return apiError(404, "Product not found.")
     }
 
-    if (product.current_owner_id !== user.id) {
-      return NextResponse.json({ error: "You don't own this product" }, { status: 403 })
+    const ownsById = product.current_owner_id === actor.id
+    const ownsByAddr = (product.current_owner_address || "").toLowerCase() === String(walletAddress).toLowerCase()
+    if (!ownsById && !ownsByAddr) {
+      return apiError(403, "You are not the current owner.", { code: "NOT_OWNER" })
     }
 
     // Record movement
     const { error: movementError } = await supabase.from("product_movements").insert([
       {
         product_id: id,
-        from_user_id: user.id,
-        to_user_id,
+        from_user_id: actor.id,
+        to_user_id: to_user_id || null,
         movement_type,
         location,
         notes,
@@ -41,25 +51,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ])
 
     if (movementError) {
-      return NextResponse.json({ error: movementError.message }, { status: 400 })
+      console.error("[transfer] movement insert error", movementError)
+      return apiError(400, "Failed to record movement.", { code: "MOVE_FAILED" })
     }
 
     // Update product owner
     const { error: updateError } = await supabase
       .from("products")
       .update({
-        current_owner_id: to_user_id,
+        current_owner_id: to_user_id || null,
+        current_owner_address: to_address ? String(to_address).toLowerCase() : product.current_owner_address,
         status: "in_transit",
       })
       .eq("id", id)
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 })
+      console.error("[transfer] product update error", updateError)
+      return apiError(400, "Failed to update product ownership.", { code: "UPDATE_FAILED" })
     }
 
-    return NextResponse.json({ success: true }, { status: 200 })
+    return apiSuccess(200, { ok: true })
   } catch (err) {
     console.error("[v0] Error transferring product:", err)
-    return NextResponse.json({ error: "Failed to transfer product" }, { status: 500 })
+    return apiError(500, "Unexpected error transferring product.")
   }
 }

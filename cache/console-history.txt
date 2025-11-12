@@ -1,3 +1,5 @@
+sender = await ethers.getSigner("0x90F79bf6EB2c4f870365E785982E1f101E93b906");await sender.sendTransaction({ to: "0x6b8318b8863817e70de308adc762098dfb1232b1", value: 500n * 10n**18n });
+const sender = await ethers.getSigner("0x90F79bf6EB2c4f870365E785982E1f101E93b906");await sender.sendTransaction({ to: "0x6b8318b8863817e70de308adc762098dfb1232b1", value: 500n * 10n**18n });
 clear
 await c.verify("0xd313402c30375d06bf9b209c04a4170982a004d8")
  const c = await ethers.getContractAt("CertificationRegistry", "0x5FbDB2315678afecb367f032d93F642f64180aa3")

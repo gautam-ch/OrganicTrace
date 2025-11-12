@@ -37,14 +37,14 @@ export default function ProcessorDashboard({ user, profile }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1) Fetch products assigned by user id
+        // 1) Fetch products assigned by this processor profile
         const { data: byUser } = await supabase
           .from("products")
           .select("*")
-          .eq("current_owner_id", user.id)
+          .eq("current_owner_id", profile.id || user.id)
           .neq("status", "processed")
 
-        // 2) Also fetch any unclaimed transfers that match this user's wallet
+        // 2) Also fetch any unclaimed transfers that match this wallet address
         let byWallet = []
         if (walletAddress) {
           const { data: byAddr } = await supabase
@@ -55,34 +55,30 @@ export default function ProcessorDashboard({ user, profile }) {
             .neq("status", "processed")
           byWallet = byAddr || []
 
-          // Optional backfill: claim these to the logged-in user for persistence
           if (byWallet.length > 0) {
             const ids = byWallet.map((p) => p.id)
             await supabase
               .from("products")
-              .update({ current_owner_id: user.id })
+              .update({ current_owner_id: profile.id || user.id })
               .in("id", ids)
           }
         }
 
-        // Fetch processor's approved certification requests (same table used by farmers)
         const { data: certsData } = await supabase
           .from("certification_requests")
           .select("*")
-          .eq("farmer_id", user.id)
+          .eq("farmer_id", profile.id || user.id)
           .eq("status", "approved")
           .order("updated_at", { ascending: false })
 
-        // Merge and de-duplicate products
         const merged = [...(byUser || []), ...byWallet]
         const unique = Array.from(new Map(merged.map((p) => [p.id, p])).values())
         setReceivedProducts(unique)
 
-        // 3) Fetch products processed/created by this processor (child products)
         const { data: processed } = await supabase
           .from("products")
           .select("*")
-          .eq("farmer_id", user.id)
+          .eq("farmer_id", profile.id || user.id)
           .eq("status", "processed")
           .order("updated_at", { ascending: false })
         setProcessedProducts(processed || [])
@@ -95,7 +91,7 @@ export default function ProcessorDashboard({ user, profile }) {
     }
 
     fetchData()
-  }, [user.id, walletAddress, supabase])
+  }, [profile.id, user.id, walletAddress, supabase])
 
   // After a successful processing tx, upsert the new child product and mark parent as processed
   useEffect(() => {
@@ -107,19 +103,16 @@ export default function ProcessorDashboard({ user, profile }) {
         const productId = events?.[0]?.args?.productId
         if (typeof productId !== "bigint") throw new Error("Could not parse productId from logs")
 
-        const {
-          data: { user: me },
-        } = await supabase.auth.getUser()
-        if (!me) throw new Error("Not authenticated")
+        if (!profile?.id) throw new Error("Profile not loaded")
 
-        // Upsert new processed product
+        // Upsert new processed product referencing the processor profile
         const { error: upsertError } = await supabase
           .from("products")
           .upsert(
             [
               {
-                farmer_id: me.id, // creator (processor)
-                current_owner_id: me.id,
+                farmer_id: profile.id,
+                current_owner_id: profile.id,
                 product_name: procName,
                 product_sku: batchId,
                 product_type: productType || null,
@@ -127,7 +120,7 @@ export default function ProcessorDashboard({ user, profile }) {
                 status: "processed",
                 product_id_onchain: Number(productId),
                 last_tx_hash: receipt.transactionHash,
-                current_owner_address: address || null,
+                current_owner_address: walletAddress || address || null,
                 blockchain_hash: receipt.transactionHash,
               },
             ],
@@ -145,7 +138,7 @@ export default function ProcessorDashboard({ user, profile }) {
         const { data: processed } = await supabase
           .from("products")
           .select("*")
-          .eq("farmer_id", me.id)
+          .eq("farmer_id", profile.id)
           .eq("status", "processed")
           .order("updated_at", { ascending: false })
         setProcessedProducts(processed || [])

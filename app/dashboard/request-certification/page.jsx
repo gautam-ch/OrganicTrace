@@ -32,6 +32,7 @@ export default function RequestCertificationPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          walletAddress: farmerAddress,
           name,
           farmer_address: farmerAddress,
           document_url: docUrl,

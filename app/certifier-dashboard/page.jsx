@@ -49,10 +49,11 @@ export default function CertifierDashboard() {
       if (!confirmed || !selected) return
       try {
         const expiry = new Date(Date.now() + oneYearMs).toISOString()
+        // Pass walletAddress required by approve API
         await fetch("/api/certifications/approve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ request_id: selected.id, tx_hash: txHash, expiry_date: expiry }),
+          body: JSON.stringify({ walletAddress: address, request_id: selected.id, tx_hash: txHash, expiry_date: expiry }),
         })
         setSelected(null)
         await loadPending()
