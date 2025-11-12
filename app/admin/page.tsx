@@ -57,12 +57,21 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!receiptError) return
-    const msg =
-      (typeof receiptError === "object" && receiptError !== null && "shortMessage" in receiptError
-        ? String((receiptError as any).shortMessage || (receiptError as any).message)
-        : receiptError instanceof Error
-        ? receiptError.message
-        : String(receiptError)) || "Transaction failed"
+
+    // Normalize possible error shapes without using `instanceof` (TS strict mode)
+    let msg = "Transaction failed"
+
+    if (typeof receiptError === "object" && receiptError !== null) {
+      const anyErr = receiptError as any
+      if ("shortMessage" in anyErr || "message" in anyErr) {
+        msg = String(anyErr.shortMessage || anyErr.message || msg)
+      } else {
+        msg = String(anyErr)
+      }
+    } else {
+      msg = String(receiptError)
+    }
+
     setErrorMessage(msg)
   }, [receiptError])
 
@@ -116,11 +125,16 @@ export default function AdminPage() {
   const buttonLabel = submitting ? "Awaiting signature..." : confirming ? "Confirming..." : "Grant Certifier Access"
 
   const resolvedAdminError = adminError
-    ? (typeof adminError === "object" && adminError !== null && "shortMessage" in adminError
-        ? String((adminError as any).shortMessage || (adminError as any).message)
-        : adminError instanceof Error
-        ? adminError.message
-        : String(adminError))
+    ? (() => {
+        if (typeof adminError === "object" && adminError !== null) {
+          const anyErr = adminError as any
+          if ("shortMessage" in anyErr || "message" in anyErr) {
+            return String(anyErr.shortMessage || anyErr.message)
+          }
+          return String(anyErr)
+        }
+        return String(adminError)
+      })()
     : null
 
   return (

@@ -66,67 +66,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-  // Verify farmer certification
-    const isCertified = await verifyCertification(productData.farmer)
-
-    // Optionally fetch certification proof
-    let certification: null | {
-      certifier: string
-      certifierFull: string
-      verifiedAt: string
-      txHash: string
-      documentUrl?: string | null
-    } = null
-
-    // Try to retrieve an accompanying certification document URL from Supabase
-    let documentUrl: string | null = null
-    // First, try from the products -> certifications relation by UUID if provided
-    const { data: prodDocByUuid } = await supabase
-      .from("products")
-      .select("certifications:certification_id(certificate_url)")
-      .eq("id", id)
-      .maybeSingle()
-
-    documentUrl = (prodDocByUuid as any)?.certifications?.certificate_url ?? null
-
-    // If not found and we do have an on-chain product id, resolve by product_id_onchain
-    if (!documentUrl && productId != null) {
-      const { data: prodDocByOnchain } = await supabase
-        .from("products")
-        .select("certifications:certification_id(certificate_url)")
-        .eq("product_id_onchain", productId)
-        .maybeSingle()
-      documentUrl = (prodDocByOnchain as any)?.certifications?.certificate_url ?? null
-    }
-
-    // Fallback: look up the latest certification request document for this farmer wallet
-    if (!documentUrl) {
-      const { data: reqDoc } = await supabase
-        .from("certification_requests")
-        .select("document_url")
-        .eq("farmer_address", productData.farmer)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      documentUrl = (reqDoc as any)?.document_url ?? null
-    }
-
-    if (isCertified) {
-      const details = await getCertificationDetails(productData.farmer)
-      const proof = await getCertificationGrantProof(productData.farmer)
-      if (details) {
-        certification = {
-          certifier: proof?.certifier ? formatAddress(proof.certifier) : "Unknown",
-          certifierFull: proof?.certifier || "",
-          verifiedAt: formatDate(details.grantedAt),
-          txHash: proof?.txHash || "",
-          documentUrl,
-        }
-      }
-    }
-
     // Resolve human-friendly names from Supabase where possible
-    let farmerName: string | null = null
+  let producerName: string | null = null
     let ownerName: string | null = null
 
     // Try resolving via products table (preferred, authoritative mapping)
@@ -159,7 +100,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         profiles?.forEach((p: any) => {
           if (p?.id && p?.full_name) map.set(p.id, p.full_name as string)
         })
-        if (prodForNames?.farmer_id) farmerName = map.get(prodForNames.farmer_id) || null
+    if (prodForNames?.farmer_id) producerName = map.get(prodForNames.farmer_id) || null
         if (prodForNames?.current_owner_id) ownerName = map.get(prodForNames.current_owner_id) || null
       }
     } catch (_) {
@@ -167,11 +108,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Fallback 1: resolve by profiles.wallet_address if available
-    if (!farmerName || !ownerName) {
+    if (!producerName || !ownerName) {
       try {
         const addrFilters: string[] = []
-        if (!farmerName) addrFilters.push(`wallet_address.eq.${productData.farmer}`)
-        if (!ownerName) addrFilters.push(`wallet_address.eq.${productData.currentOwner}`)
+        if (!producerName) addrFilters.push(`wallet_address.eq.${productData.farmer.toLowerCase()}`)
+        if (!ownerName) addrFilters.push(`wallet_address.eq.${productData.currentOwner.toLowerCase()}`)
         if (addrFilters.length > 0) {
           const { data: profByAddr } = await supabase
             .from("profiles")
@@ -179,8 +120,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             .or(addrFilters.join(","))
           profByAddr?.forEach((p: any) => {
             if (!p) return
-            if (!farmerName && p.wallet_address === productData.farmer && p.full_name) farmerName = p.full_name
-            if (!ownerName && p.wallet_address === productData.currentOwner && p.full_name) ownerName = p.full_name
+            if (!producerName && p.wallet_address?.toLowerCase() === productData.farmer.toLowerCase() && p.full_name) producerName = p.full_name
+            if (!ownerName && p.wallet_address?.toLowerCase() === productData.currentOwner.toLowerCase() && p.full_name) ownerName = p.full_name
           })
         }
       } catch (_) {
@@ -189,16 +130,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Fallback 2: use certification_requests.name for farmer wallet address
-    if (!farmerName) {
+    if (!producerName) {
       try {
         const { data: reqDoc } = await supabase
           .from("certification_requests")
           .select("name")
-          .eq("farmer_address", productData.farmer)
+          .eq("farmer_address", productData.farmer.toLowerCase())
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle()
-        farmerName = (reqDoc as any)?.name || null
+        producerName = (reqDoc as any)?.name || null
       } catch (_) {
         // ignore
       }
@@ -214,6 +155,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       productName: string
     }>
     let parentInfo: null | { id: string; name: string } = null
+    let parentData: Awaited<ReturnType<typeof getProductDetails>> | null = null
 
     // Prefer on-chain parent id; fall back to inferring from the child's first event details JSON
     let parentIdStr: string = productData.parentProductId || "0"
@@ -230,7 +172,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (parentIdStr !== "0") {
-      const parentData = await getProductDetails(Number(parentIdStr))
+      parentData = await getProductDetails(Number(parentIdStr))
       if (parentData) {
         parentInfo = { id: parentData.productId, name: parentData.productName }
         const parentHist = parentData.history.map((entry: any) => ({
@@ -238,8 +180,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           actor: formatAddress(entry.actor),
           timestamp: formatDate(entry.timestamp),
           details: entry.details,
-          productId: parentData.productId,
-          productName: parentData.productName,
+          productId: parentData!.productId,
+          productName: parentData!.productName,
         }))
         let childHist: Array<{ action: string; actor: string; timestamp: string; details: string; productId: string; productName: string }>
           = productData.history.map((entry: any) => ({
@@ -250,7 +192,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           productId: productData.productId,
           productName: productData.productName,
         }))
-        // Backward compatibility: if child creation was recorded as "Harvested" while having a parent, relabel it to "Processed"
         childHist = childHist.map((e: any, idx: number) =>
           idx === 0 && typeof e.action === "string" && e.action.toLowerCase().startsWith("harvested")
             ? { ...e, action: "Processed" }
@@ -278,22 +219,151 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }))
     }
 
+    // Derive origin farmer data (the base product's farmer if this is a processed good)
+    const originProductData = parentData ?? productData
+    const originFarmerAddress = originProductData.farmer
+    let originFarmerName: string | null = parentData ? null : producerName
+
+    if (parentData && !originFarmerName) {
+      try {
+        const { data: parentRecord } = await supabase
+          .from("products")
+          .select("farmer_id")
+          .eq("product_id_onchain", Number(parentData.productId))
+          .limit(1)
+          .maybeSingle()
+
+        if (parentRecord?.farmer_id) {
+          const { data: parentProfile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", parentRecord.farmer_id)
+            .maybeSingle()
+
+          if (parentProfile?.full_name) {
+            originFarmerName = parentProfile.full_name as string
+          }
+        }
+      } catch (_) {
+        // ignore lookup errors
+      }
+    }
+
+    if (!originFarmerName) {
+      try {
+        const { data: originProfile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("wallet_address", originFarmerAddress.toLowerCase())
+          .maybeSingle()
+
+        if (originProfile?.full_name) {
+          originFarmerName = originProfile.full_name as string
+        }
+      } catch (_) {
+        // ignore lookup errors
+      }
+    }
+
+    if (!originFarmerName) {
+      try {
+        const { data: originReq } = await supabase
+          .from("certification_requests")
+          .select("name")
+          .eq("farmer_address", originFarmerAddress.toLowerCase())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        originFarmerName = (originReq as any)?.name || null
+      } catch (_) {
+        // ignore lookup errors
+      }
+    }
+
+    // Re-evaluate certification details against the origin farmer wallet
+    let documentUrl: string | null = null
+    const { data: prodDocByUuid } = await supabase
+      .from("products")
+      .select("certifications:certification_id(certificate_url)")
+      .eq("id", id)
+      .maybeSingle()
+
+    documentUrl = (prodDocByUuid as any)?.certifications?.certificate_url ?? null
+
+    if (!documentUrl && productId != null) {
+      const { data: prodDocByOnchain } = await supabase
+        .from("products")
+        .select("certifications:certification_id(certificate_url)")
+        .eq("product_id_onchain", productId)
+        .maybeSingle()
+      documentUrl = (prodDocByOnchain as any)?.certifications?.certificate_url ?? null
+    }
+
+    if (!documentUrl && parentData) {
+      const { data: parentDoc } = await supabase
+        .from("products")
+        .select("certifications:certification_id(certificate_url)")
+        .eq("product_id_onchain", Number(parentData.productId))
+        .maybeSingle()
+      documentUrl = (parentDoc as any)?.certifications?.certificate_url ?? null
+    }
+
+    if (!documentUrl) {
+      const { data: originReqDoc } = await supabase
+        .from("certification_requests")
+        .select("document_url")
+        .eq("farmer_address", originFarmerAddress.toLowerCase())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      documentUrl = (originReqDoc as any)?.document_url ?? null
+    }
+
+    const isOriginCertified = await verifyCertification(originFarmerAddress)
+
+    let certification: null | {
+      certifier: string
+      certifierFull: string
+      verifiedAt: string
+      txHash: string
+      documentUrl?: string | null
+    } = null
+
+    if (isOriginCertified) {
+      const details = await getCertificationDetails(originFarmerAddress)
+      const proof = await getCertificationGrantProof(originFarmerAddress)
+      if (details) {
+        certification = {
+          certifier: proof?.certifier ? formatAddress(proof.certifier) : "Unknown",
+          certifierFull: proof?.certifier || "",
+          verifiedAt: formatDate(details.grantedAt),
+          txHash: proof?.txHash || "",
+          documentUrl,
+        }
+      }
+    }
+
     // Format response with readable data, including optional names and parent references
     const response = {
       product: {
         id: productData.productId,
         name: productData.productName,
-        farmer: formatAddress(productData.farmer),
-        farmerFull: productData.farmer,
-        farmerName: farmerName || null,
+        farmer: formatAddress(originFarmerAddress),
+        farmerFull: originFarmerAddress,
+        farmerName: originFarmerName,
         currentOwner: formatAddress(productData.currentOwner),
         currentOwnerFull: productData.currentOwner,
         currentOwnerName: ownerName || null,
         createdAt: formatDate(productData.createdAt),
-        isFarmerCertified: isCertified,
+        isFarmerCertified: isOriginCertified,
         certification,
         parentProductId: productData.parentProductId,
         parent: parentInfo,
+        producer: {
+          address: formatAddress(productData.farmer),
+          addressFull: productData.farmer,
+          name: producerName,
+        },
       },
       history: stitchedHistory,
     }

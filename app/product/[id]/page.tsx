@@ -29,6 +29,11 @@ interface ChainProductResponse {
     } | null
     parentProductId?: string
     parent?: { id: string; name: string } | null
+    producer?: {
+      address: string
+      addressFull: string
+      name?: string | null
+    } | null
   }
   history: Array<{
     action: string
@@ -466,9 +471,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                                 <div className="flex items-center gap-3">
                                   <h3 className="font-semibold text-lg">{entry.action}</h3>
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                                    {entry.action.toLowerCase().includes("harvest") ? "Origin" : 
-                                     entry.action.toLowerCase().includes("transfer") ? "Movement" : 
-                                     entry.action.toLowerCase().includes("process") ? "Processing" : "Event"}
+                                    {entry.action.toLowerCase().includes("harvest") ? "Origin" : entry.action.toLowerCase().includes("transfer") ? "Movement" : "Processed Food"}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2">
