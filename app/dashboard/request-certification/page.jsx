@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useAccount } from "wagmi"
 import { Input } from "@/components/ui/input"
@@ -55,8 +56,18 @@ export default function RequestCertificationPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl p-6">
-      <Card>
+    <div className="container mx-auto p-6">
+      <div className="max-w-xl mx-auto mt-6 flex items-center gap-2">
+        <Link href="/dashboard">
+          <Button variant="ghost" size="sm" className="flex items-center gap-1 text-lg">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back
+          </Button>
+        </Link>
+      </div>
+      <Card className="max-w-xl mx-auto mt-2">
         <CardHeader>
           <CardTitle>Request Certification</CardTitle>
         </CardHeader>
@@ -99,4 +110,3 @@ export default function RequestCertificationPage() {
     </div>
   )
 }
- 

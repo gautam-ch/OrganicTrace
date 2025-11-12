@@ -81,46 +81,52 @@ export default function Home() {
         <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
         <div className="grid md:grid-cols-3 gap-8">
           {/* Feature 1 */}
-          <Card className="p-8 border border-border hover:border-primary transition-colors">
+          <Card className="p-8 border border-border hover:border-primary transition-colors flex flex-col">
             <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
               <span className="text-2xl">🌾</span>
             </div>
             <h3 className="text-xl font-semibold mb-3">For Farmers</h3>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-6 grow">
               Register your organic certification and create digital passports for each product batch. Prove your
               compliance on the blockchain.
             </p>
-            {!profile && <ConnectButton fixed={false} />}
+            <div className="flex justify-center">
+              {!profile && <ConnectButton fixed={false} />}
+            </div>
           </Card>
 
           {/* Feature 2 */}
-          <Card className="p-8 border border-border hover:border-primary transition-colors">
+          <Card className="p-8 border border-border hover:border-primary transition-colors flex flex-col">
             <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
               <span className="text-2xl">🏭</span>
             </div>
             <h3 className="text-xl font-semibold mb-3">For Processors</h3>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-6 grow">
               Track incoming products and maintain chain of custody. Transfer products with verifiable details at each
               step.
             </p>
-            {!profile && <ConnectButton fixed={false} />}
+            <div className="flex justify-center">
+              {!profile && <ConnectButton fixed={false} />}
+            </div>
           </Card>
 
           {/* Feature 3 */}
-          <Card className="p-8 border border-border hover:border-primary transition-colors">
+          <Card className="p-8 border border-border hover:border-primary transition-colors flex flex-col">
             <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
               <span className="text-2xl">👥</span>
             </div>
             <h3 className="text-xl font-semibold mb-3">For Consumers</h3>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-6 grow">
               Scan QR codes to view complete product history, verify organic certification, and build trust in what you
               buy.
             </p>
-            <Link href="/product">
-              <Button variant="outline" className="w-full bg-transparent">
-                Scan a Product
-              </Button>
-            </Link>
+            <div className="flex justify-center">
+              <Link href="/product">
+                <Button variant="outline" className="bg-transparent">
+                  Scan a Product
+                </Button>
+              </Link>
+            </div>
           </Card>
         </div>
       </section>
