@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -305,15 +306,16 @@ export default function ProcessorDashboard({ user, profile }) {
                     <span className="text-muted-foreground">Status:</span> {product.status}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-3 mb-3">
                   {/* Process button only when we have an on-chain parent id */}
                   {product.product_id_onchain && product.status !== "processed" ? (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setActive(product)}>
-                          Process
-                        </Button>
-                      </DialogTrigger>
+                    <>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setActive(product)}>
+                            Process
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent className="max-w-lg">
                         <DialogHeader>
                           <DialogTitle>Create Processed Product</DialogTitle>
@@ -350,7 +352,15 @@ export default function ProcessorDashboard({ user, profile }) {
                           </div>
                         </div>
                       </DialogContent>
-                    </Dialog>
+                      </Dialog>
+                      {product.id && (
+                        <Link href={`/product/${product.id}/qr`}>
+                        <Badge variant="outline" className="cursor-pointer px-3 py-1 text-xs">
+                          Generate QR
+                        </Badge>
+                        </Link>
+                      )}
+                    </>
                   ) : (
                     <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">Not synced on-chain</span>
                   )}
@@ -382,7 +392,16 @@ export default function ProcessorDashboard({ user, profile }) {
           <div className="grid md:grid-cols-2 gap-6">
             {processedProducts.map((product) => (
               <Card key={product.id || product.product_id_onchain} className="p-6 border border-border hover:border-primary transition-colors">
-                <h3 className="font-semibold text-lg mb-2">{product.product_name}</h3>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="font-semibold text-lg">{product.product_name}</h3>
+                  {product.id && (
+                    <Link href={`/product/${product.id}/qr`}>
+                      <Badge variant="outline" className="cursor-pointer px-3 py-1 text-xs">
+                        Generate QR
+                      </Badge>
+                    </Link>
+                  )}
+                </div>
                 <div className="space-y-2 text-sm mb-4">
                   <p>
                     <span className="text-muted-foreground">Type:</span> {product.product_type || "—"}
