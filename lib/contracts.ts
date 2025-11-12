@@ -4,6 +4,27 @@ export const PRODUCT_TRACKER_ADDRESS: string = process.env.NEXT_PUBLIC_PRODUCT_T
 // Minimal ABI subset needed by the app
 export const CertificationRegistryABI: any[] = [
 	{
+		inputs: [],
+		name: "admin",
+		outputs: [{ internalType: "address", name: "", type: "address" }],
+		stateMutability: "view",
+		type: "function",
+	},
+	{
+		inputs: [{ internalType: "address", name: "_certifier", type: "address" }],
+		name: "addCertifier",
+		outputs: [],
+		stateMutability: "nonpayable",
+		type: "function",
+	},
+	{
+		inputs: [{ internalType: "address", name: "_certifier", type: "address" }],
+		name: "removeCertifier",
+		outputs: [],
+		stateMutability: "nonpayable",
+		type: "function",
+	},
+	{
 		inputs: [
 			{ internalType: "address", name: "_farmer", type: "address" },
 			{ internalType: "uint256", name: "_expiryDate", type: "uint256" },
