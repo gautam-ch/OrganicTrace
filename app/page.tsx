@@ -4,9 +4,24 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import ConnectButton from "@/components/wallet/connect-button"
 import { useProfile } from "@/components/auth/profile-context"
+import { useAccount, useReadContract } from "wagmi"
+import { CertificationRegistryABI, CERT_REGISTRY_ADDRESS } from "@/lib/contracts"
 
 export default function Home() {
   const { profile } = useProfile()
+  const { address } = useAccount()
+  const contractAddress = CERT_REGISTRY_ADDRESS ? (CERT_REGISTRY_ADDRESS as `0x${string}`) : undefined
+  const shouldCheckCertifier = !!address && !!contractAddress
+  const { data: isCertifier } = useReadContract({
+    abi: CertificationRegistryABI,
+    address: contractAddress,
+    functionName: "certifiers",
+    args: address ? [address as `0x${string}`] : undefined,
+    query: { enabled: shouldCheckCertifier },
+  })
+  const isCertifierAddress = typeof isCertifier === "boolean" ? isCertifier : false
+  const dashboardHref = isCertifierAddress ? "/certifier-dashboard" : "/dashboard"
+  const canShowDashboardLink = Boolean(profile) || isCertifierAddress
   return (
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
       {/* Navigation */}
@@ -20,9 +35,9 @@ export default function Home() {
           </div>
           <div className="flex gap-3 items-center">
             <ConnectButton fixed={false} />
-            {profile ? (
+            {canShowDashboardLink ? (
               <>
-                <Link href="/dashboard">
+                <Link href={dashboardHref}>
                   <Button variant="outline">Dashboard</Button>
                 </Link>
               </>
@@ -45,8 +60,8 @@ export default function Home() {
           </p>
           <div className="flex gap-4 justify-center pt-4">
             {!profile && <ConnectButton fixed={false} />}
-            {profile && (
-              <Link href="/dashboard">
+            {canShowDashboardLink && (
+              <Link href={dashboardHref}>
                 <Button size="lg" className="bg-primary hover:bg-primary/90">
                   Go to Dashboard
                 </Button>
@@ -225,11 +240,6 @@ export default function Home() {
         <p className="text-muted-foreground mb-8 text-lg">
           Join thousands of organic producers building consumer trust through complete product traceability.
         </p>
-        <Link href="/auth/signup">
-          <Button size="lg" className="bg-primary hover:bg-primary/90">
-            Get Started Today
-          </Button>
-        </Link>
       </section>
 
       {/* Footer */}
@@ -245,11 +255,6 @@ export default function Home() {
                 <li>
                   <Link href="/product" className="hover:text-primary">
                     Track Product
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/auth/signup" className="hover:text-primary">
-                    Sign Up
                   </Link>
                 </li>
               </ul>

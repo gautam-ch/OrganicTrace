@@ -12,6 +12,8 @@ function short(addr: string) {
   return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ""
 }
 
+const CERTIFIER_REDIRECT_KEY = "certifierRedirected"
+
 export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
   const { address, isConnected, isConnecting } = useAccount()
   const router = useRouter()
@@ -24,21 +26,60 @@ export default function ConnectButton({ fixed = true }: { fixed?: boolean }) {
 
   const injected = useMemo(() => connectors.find((c) => c.id === "injected"), [connectors])
   // If connected and this address is a certifier, auto-route to certifier dashboard
+  const contractAddress = CERT_REGISTRY_ADDRESS ? (CERT_REGISTRY_ADDRESS as `0x${string}`) : undefined
   const { data: isCertifier } = useReadContract({
     abi: CertificationRegistryABI,
-    address: CERT_REGISTRY_ADDRESS as `0x${string}` | undefined,
+    address: contractAddress,
     functionName: "certifiers",
     args: address ? [address as `0x${string}`] : undefined,
-    query: { enabled: !!address && !!CERT_REGISTRY_ADDRESS },
+    query: { enabled: !!address && !!contractAddress },
   })
+  const isCertifierBool = typeof isCertifier === "boolean" ? isCertifier : false
+
+  const hasRedirected = useRef(false)
+  const lastRedirectedAddress = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!isConnected || !address) return
-    if (!isCertifier) return
-    if (pathname !== "/certifier-dashboard") {
-      router.push("/certifier-dashboard")
+    if (typeof window === "undefined") return
+    const stored = window.sessionStorage.getItem(CERTIFIER_REDIRECT_KEY)
+    if (stored) {
+      hasRedirected.current = true
+      lastRedirectedAddress.current = stored
     }
-  }, [isConnected, address, isCertifier, pathname, router])
+  }, [])
+
+  useEffect(() => {
+    if (!isConnected || !address) {
+      hasRedirected.current = false
+      lastRedirectedAddress.current = null
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(CERTIFIER_REDIRECT_KEY)
+      }
+      return
+    }
+
+    if (lastRedirectedAddress.current && lastRedirectedAddress.current !== address) {
+      hasRedirected.current = false
+    }
+
+    if (!isCertifierBool) return
+    if (hasRedirected.current) return
+    if (pathname === "/certifier-dashboard") {
+      hasRedirected.current = true
+      lastRedirectedAddress.current = address
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(CERTIFIER_REDIRECT_KEY, address)
+      }
+      return
+    }
+
+    hasRedirected.current = true
+    lastRedirectedAddress.current = address
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(CERTIFIER_REDIRECT_KEY, address)
+    }
+    router.push("/certifier-dashboard")
+  }, [isConnected, address, isCertifierBool, pathname, router])
 
   // When a user is logged in and connects a wallet, persist the address to their profile.
   useEffect(() => {
