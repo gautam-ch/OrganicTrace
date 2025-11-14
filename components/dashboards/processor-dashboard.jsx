@@ -230,9 +230,14 @@ export default function ProcessorDashboard({ user, profile }) {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">Organic Certifications</h2>
-          <Link href="/dashboard/request-certification">
-            <Button className="bg-primary hover:bg-primary/90">+ Request Certification</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/request-certification">
+              <Button className="bg-primary hover:bg-primary/90">+ Request Certification</Button>
+            </Link>
+            <Link href="/dashboard/certification-status">
+              <Button variant="outline">Check Status</Button>
+            </Link>
+          </div>
         </div>
 
         {loading ? (

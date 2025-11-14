@@ -7,6 +7,7 @@ import { createClient as createSb } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import DashboardHeader from "@/components/layout/dashboard-header"
 
 const oneYearMs = 365 * 24 * 60 * 60 * 1000
@@ -17,6 +18,10 @@ export default function CertifierDashboard() {
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [rejectingId, setRejectingId] = useState(null)
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
+  const [activeRejectReq, setActiveRejectReq] = useState(null)
+  const [rejectReason, setRejectReason] = useState("")
 
   const { data: isCertifier } = useReadContract({
     abi: CertificationRegistryABI,
@@ -63,6 +68,32 @@ export default function CertifierDashboard() {
     }
     afterConfirm()
   }, [confirmed])
+
+  function openRejectModal(req) {
+    setActiveRejectReq(req)
+    setRejectReason("")
+    setIsRejectModalOpen(true)
+  }
+
+  async function confirmReject() {
+    if (!address || !activeRejectReq) return
+    setRejectingId(activeRejectReq.id)
+    try {
+      await fetch("/api/certifications/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: address, request_id: activeRejectReq.id, reason: rejectReason }),
+      })
+      setIsRejectModalOpen(false)
+      setActiveRejectReq(null)
+      setRejectReason("")
+      await loadPending()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setRejectingId(null)
+    }
+  }
 
   function approveRequest(req) {
     if (!address) return
@@ -135,9 +166,20 @@ export default function CertifierDashboard() {
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate">{req.notes || "—"}</TableCell>
                       <TableCell>
-                        <Button size="sm" onClick={() => approveRequest(req)} disabled={isWriting || waiting}>
-                          Approve
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" onClick={() => approveRequest(req)} disabled={isWriting || waiting}>
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600"
+                            onClick={() => openRejectModal(req)}
+                            disabled={isWriting || waiting || rejectingId === req.id}
+                          >
+                            {rejectingId === req.id ? "Rejecting..." : "Reject"}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -148,6 +190,33 @@ export default function CertifierDashboard() {
         </CardContent>
       </Card>
     </div>
+      {/* Reject reason modal */}
+      <Dialog open={isRejectModalOpen} onOpenChange={setIsRejectModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Certification Request</DialogTitle>
+            <DialogDescription>Enter a brief reason for rejecting this request.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-2">
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason for rejection (required)"
+              rows={4}
+              className="w-full rounded-md border p-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRejectModalOpen(false)} disabled={!!rejectingId}>
+              Cancel
+            </Button>
+            <Button onClick={confirmReject} disabled={!!rejectingId || !rejectReason.trim()}>
+              {rejectingId ? "Rejecting..." : "Reject"}
+            </Button>
+          </DialogFooter>
+          <DialogClose />
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }
