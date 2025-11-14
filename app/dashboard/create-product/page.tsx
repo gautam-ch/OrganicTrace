@@ -16,6 +16,8 @@ import { readContract } from "wagmi/actions"
 import { parseEventLogs } from "viem"
 import { CERT_REGISTRY_ADDRESS, PRODUCT_TRACKER_ADDRESS, CertificationRegistryABI, ProductTrackerABI } from "@/lib/contracts"
 import wagmiConfig from "@/lib/wagmi"
+import MediaUploader from "@/components/media/media-uploader"
+import type { UploadedMedia } from "@/types/media"
 
 export default function CreateProductPage() {
   const router = useRouter()
@@ -24,6 +26,7 @@ export default function CreateProductPage() {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined)
   const [synced, setSynced] = useState(false)
   const [isCertified, setIsCertified] = useState<boolean | null>(null)
+  const [media, setMedia] = useState<UploadedMedia[]>([])
   const { address } = useAccount()
   const { writeContractAsync } = useWriteContract()
   const {
@@ -93,6 +96,7 @@ export default function CreateProductPage() {
         description: formData.description,
         farming_practices: formData.farming_practices,
         harvest_date: formData.harvest_date,
+        media: media.map((m) => m.cid),
       })
 
       // Call ProductTracker.createProduct(name, parentId=0, details)
@@ -208,6 +212,7 @@ export default function CreateProductPage() {
             product_id_onchain: Number(productId),
             blockchain_hash: receipt.transactionHash,
             last_tx_hash: receipt.transactionHash,
+            media,
           }),
         })
 
@@ -335,6 +340,13 @@ export default function CreateProductPage() {
                 onChange={handleChange}
               />
             </div>
+
+            <MediaUploader
+              label="Product Photos"
+              description="Upload up to 5 images. They'll be pinned to IPFS automatically."
+              value={media}
+              onChange={setMedia}
+            />
 
             {error && <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg text-sm">{error}</div>}
 

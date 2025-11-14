@@ -41,6 +41,7 @@ contract ProductTracker {
     string action;
     uint256 timestamp;
     string details;
+    string ipfsImageHash;
   }
 
   // Events
@@ -54,6 +55,13 @@ contract ProductTracker {
     address indexed from,
     address indexed to,
     string action
+  );
+  event HistoryEventAdded(
+    uint256 indexed productId,
+    address indexed actor,
+    string action,
+    string details,
+    string ipfsImageHash
   );
 
   // Modifiers
@@ -84,7 +92,7 @@ contract ProductTracker {
   function createProduct(
     string memory _productName,
     uint256 _parentProductId,
-    string memory _details
+    string memory /* _details */
   ) public onlyCertified returns (uint256) {
     uint256 productId = productCounter++;
 
@@ -96,23 +104,36 @@ contract ProductTracker {
     product.parentProductId = _parentProductId;
     product.createdAt = block.timestamp;
 
-    // Determine initial action: base products are "Harvested", derived products are "Processed"
-    string memory initialAction = _parentProductId == 0 ? "Harvested" : "Processed";
-
-    // Log the creation event
-    product.historyLog.push(
-      HistoryEntry({
-        actor: msg.sender,
-        action: initialAction,
-        timestamp: block.timestamp,
-        details: _details
-      })
-    );
-
     farmerProducts[msg.sender].push(productId);
 
     emit ProductCreated(productId, msg.sender, _productName);
     return productId;
+  }
+
+  /**
+   * Add a custom history event (current owner only)
+   */
+  function addHistoryEvent(
+    uint256 _productId,
+    string memory _action,
+    string memory _details,
+    string memory _ipfsImageHash
+  ) public {
+    Product storage product = products[_productId];
+    require(product.productId != 0, "Product does not exist");
+    require(product.currentOwner == msg.sender, "Only current owner can add history");
+
+    product.historyLog.push(
+      HistoryEntry({
+        actor: msg.sender,
+        action: _action,
+        timestamp: block.timestamp,
+        details: _details,
+        ipfsImageHash: _ipfsImageHash
+      })
+    );
+
+    emit HistoryEventAdded(_productId, msg.sender, _action, _details, _ipfsImageHash);
   }
 
   /**
@@ -136,7 +157,8 @@ contract ProductTracker {
         actor: msg.sender,
         action: _action,
         timestamp: block.timestamp,
-        details: _details
+        details: _details,
+        ipfsImageHash: ""
       })
     );
 
@@ -184,10 +206,10 @@ contract ProductTracker {
   function getHistoryEntry(uint256 _productId, uint256 _index)
     public
     view
-    returns (address actor, string memory action, uint256 timestamp, string memory details)
+    returns (address actor, string memory action, uint256 timestamp, string memory details, string memory ipfsImageHash)
   {
     HistoryEntry storage entry = products[_productId].historyLog[_index];
-    return (entry.actor, entry.action, entry.timestamp, entry.details);
+    return (entry.actor, entry.action, entry.timestamp, entry.details, entry.ipfsImageHash);
   }
 
   /**

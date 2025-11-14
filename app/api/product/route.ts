@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
     const product_id_onchain_raw = body.product_id_onchain
     const blockchain_hash: string | null = body.blockchain_hash ? String(body.blockchain_hash).trim() : null
     const last_tx_hash: string | null = body.last_tx_hash ? String(body.last_tx_hash).trim() : null
+  const rawMedia: unknown = body.media
+  const media = Array.isArray(rawMedia) ? sanitizeMedia(rawMedia) : []
 
     // Basic validations
     if (!walletAddress) return apiError(400, "Wallet address is required.", { code: "WALLET_REQUIRED", field: "walletAddress" })
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
       product_id_onchain,
       blockchain_hash,
       last_tx_hash,
+      media,
     }
 
     const { data, error } = await supabase.from("products").insert([insertPayload]).select().single()
@@ -149,4 +152,30 @@ export async function POST(request: NextRequest) {
     console.error("[product] create error:", err)
     return apiError(500, "Unexpected error creating product.", { code: "UNEXPECTED" })
   }
+}
+
+type LooseMedia = {
+  cid?: unknown
+  name?: unknown
+  size?: unknown
+  mimeType?: unknown
+  gatewayUrl?: unknown
+  pinnedAt?: unknown
+}
+
+function sanitizeMedia(media: unknown[]): Array<Record<string, string | number>> {
+  return media
+    .map((entry) => {
+      const item = entry as LooseMedia
+      const cid = typeof item.cid === "string" ? item.cid.trim() : null
+      if (!cid) return null
+      const normalized: Record<string, string | number> = { cid }
+      if (typeof item.name === "string" && item.name.trim()) normalized.name = item.name.trim()
+      if (typeof item.size === "number" && Number.isFinite(item.size)) normalized.size = Math.round(item.size)
+      if (typeof item.mimeType === "string" && item.mimeType.trim()) normalized.mimeType = item.mimeType.trim()
+      if (typeof item.gatewayUrl === "string" && item.gatewayUrl.trim()) normalized.gatewayUrl = item.gatewayUrl.trim()
+      if (typeof item.pinnedAt === "string" && item.pinnedAt.trim()) normalized.pinnedAt = item.pinnedAt.trim()
+      return normalized
+    })
+    .filter((entry): entry is Record<string, string | number> => Boolean(entry))
 }

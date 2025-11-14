@@ -10,9 +10,9 @@ const CERT_REGISTRY_ABI = [
 
 // ABI for ProductTracker contract
 const PRODUCT_TRACKER_ABI = [
-  "function getProduct(uint256 _productId) public view returns (uint256 productId, address farmer, address currentOwner, string memory productName, uint256 parentProductId, uint256 createdAt, tuple(address actor, string action, uint256 timestamp, string details)[] memory history)",
+  "function getProduct(uint256 _productId) public view returns (uint256 productId, address farmer, address currentOwner, string memory productName, uint256 parentProductId, uint256 createdAt, tuple(address actor, string action, uint256 timestamp, string details, string ipfsImageHash)[] memory history)",
   "function getHistoryLength(uint256 _productId) public view returns (uint256)",
-  "function getHistoryEntry(uint256 _productId, uint256 _index) public view returns (address actor, string memory action, uint256 timestamp, string memory details)",
+  "function getHistoryEntry(uint256 _productId, uint256 _index) public view returns (address actor, string memory action, uint256 timestamp, string memory details, string memory ipfsImageHash)",
 ]
 
 // Prefer server envs; fall back to NEXT_PUBLIC_* so local dev works even if server vars are missing
@@ -138,6 +138,7 @@ export async function getProductDetails(productId: number) {
         action: entry.action,
         timestamp: entry.timestamp.toString(),
         details: entry.details,
+        ipfsImageHash: entry.ipfsImageHash,
       })),
     }
   } catch (error) {

@@ -12,6 +12,7 @@ import { createClient as createSb } from "@/lib/supabase/server"
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    let productMedia: any[] | null = null
 
     // Basic env checks to provide clearer errors during setup
     const resolvedProductTracker =
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .select(
           `
           product_id_onchain,
+          media,
           certification_id,
           certifications:certification_id(certificate_url)
         `,
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         return NextResponse.json({ error: "No on-chain mapping found for this product" }, { status: 404 })
       }
       productId = Number(prod.product_id_onchain)
+      productMedia = Array.isArray(prod.media) ? prod.media : productMedia
     }
 
   // Fetch product from blockchain
@@ -75,7 +78,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // If request id was a UUID, we already looked up by id. Otherwise use on-chain id mapping
       const { data: prodForNames } = await supabase
         .from("products")
-        .select("farmer_id,current_owner_id")
+        .select("farmer_id,current_owner_id,media")
         .or(
           // try both lookup styles in one query
           [
@@ -100,7 +103,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         profiles?.forEach((p: any) => {
           if (p?.id && p?.full_name) map.set(p.id, p.full_name as string)
         })
-    if (prodForNames?.farmer_id) producerName = map.get(prodForNames.farmer_id) || null
+      if (!productMedia && Array.isArray(prodForNames?.media)) {
+        productMedia = prodForNames.media as any[]
+      }
+      if (prodForNames?.farmer_id) producerName = map.get(prodForNames.farmer_id) || null
         if (prodForNames?.current_owner_id) ownerName = map.get(prodForNames.current_owner_id) || null
       }
     } catch (_) {
@@ -151,6 +157,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       actor: string
       timestamp: string
       details: string
+      ipfsImageHash?: string | null
       productId: string
       productName: string
     }>
@@ -180,15 +187,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           actor: formatAddress(entry.actor),
           timestamp: formatDate(entry.timestamp),
           details: entry.details,
+          ipfsImageHash: entry.ipfsImageHash,
           productId: parentData!.productId,
           productName: parentData!.productName,
         }))
-        let childHist: Array<{ action: string; actor: string; timestamp: string; details: string; productId: string; productName: string }>
+        let childHist: Array<{ action: string; actor: string; timestamp: string; details: string; ipfsImageHash?: string | null; productId: string; productName: string }>
           = productData.history.map((entry: any) => ({
           action: entry.action,
           actor: formatAddress(entry.actor),
           timestamp: formatDate(entry.timestamp),
           details: entry.details,
+          ipfsImageHash: entry.ipfsImageHash,
           productId: productData.productId,
           productName: productData.productName,
         }))
@@ -204,6 +213,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           actor: formatAddress(entry.actor),
           timestamp: formatDate(entry.timestamp),
           details: entry.details,
+          ipfsImageHash: entry.ipfsImageHash,
           productId: productData.productId,
           productName: productData.productName,
         }))
@@ -214,6 +224,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         actor: formatAddress(entry.actor),
         timestamp: formatDate(entry.timestamp),
         details: entry.details,
+        ipfsImageHash: entry.ipfsImageHash,
         productId: productData.productId,
         productName: productData.productName,
       }))
@@ -284,19 +295,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let documentUrl: string | null = null
     const { data: prodDocByUuid } = await supabase
       .from("products")
-      .select("certifications:certification_id(certificate_url)")
+      .select("media, certifications:certification_id(certificate_url)")
       .eq("id", id)
       .maybeSingle()
 
     documentUrl = (prodDocByUuid as any)?.certifications?.certificate_url ?? null
+    if (!productMedia && Array.isArray((prodDocByUuid as any)?.media)) {
+      productMedia = (prodDocByUuid as any).media as any[]
+    }
 
     if (!documentUrl && productId != null) {
       const { data: prodDocByOnchain } = await supabase
         .from("products")
-        .select("certifications:certification_id(certificate_url)")
+        .select("media, certifications:certification_id(certificate_url)")
         .eq("product_id_onchain", productId)
         .maybeSingle()
       documentUrl = (prodDocByOnchain as any)?.certifications?.certificate_url ?? null
+      if (!productMedia && Array.isArray((prodDocByOnchain as any)?.media)) {
+        productMedia = (prodDocByOnchain as any).media as any[]
+      }
     }
 
     if (!documentUrl && parentData) {
@@ -364,6 +381,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           addressFull: productData.farmer,
           name: producerName,
         },
+        media: Array.isArray(productMedia) ? productMedia : [],
       },
       history: stitchedHistory,
     }

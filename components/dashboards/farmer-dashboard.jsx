@@ -7,11 +7,13 @@ import { Card } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi"
 import wagmiConfig from "@/lib/wagmi"
 import { isAddress } from "viem"
 import { PRODUCT_TRACKER_ADDRESS, ProductTrackerABI } from "@/lib/contracts"
+import MediaUploader from "@/components/media/media-uploader"
 
 export default function FarmerDashboard({ user, profile }) {
   const [products, setProducts] = useState([])
@@ -24,10 +26,19 @@ export default function FarmerDashboard({ user, profile }) {
   const [notes, setNotes] = useState("")
   const [error, setError] = useState("")
   const [txHash, setTxHash] = useState(undefined)
+  const [eventModal, setEventModal] = useState(null)
+  const [eventAction, setEventAction] = useState("Field Inspection")
+  const [eventNotes, setEventNotes] = useState("")
+  const [eventLocation, setEventLocation] = useState("")
+  const [eventMedia, setEventMedia] = useState([])
+  const [eventError, setEventError] = useState("")
+  const [eventSuccess, setEventSuccess] = useState("")
+  const [eventTxHash, setEventTxHash] = useState(undefined)
   const supabase = createClient()
   const { address } = useAccount()
   const { writeContractAsync } = useWriteContract()
   const { data: receipt, isLoading: waitingReceipt, isSuccess: isMined } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 })
+  const { data: eventReceipt, isLoading: waitingEventReceipt, isSuccess: eventMined } = useWaitForTransactionReceipt({ hash: eventTxHash, confirmations: 1 })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -98,6 +109,33 @@ export default function FarmerDashboard({ user, profile }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMined, receipt])
 
+  useEffect(() => {
+    if (!eventMined || !eventTxHash) return
+    setEventSuccess("Journey event recorded on-chain.")
+    setEventTxHash(undefined)
+  }, [eventMined, eventTxHash])
+
+  const resetEventForm = () => {
+    setEventAction("Field Inspection")
+    setEventNotes("")
+    setEventLocation("")
+  setEventMedia([])
+    setEventError("")
+    setEventSuccess("")
+    setEventTxHash(undefined)
+  }
+
+  const openEventModal = (product) => {
+    setEventModal(product)
+    setEventAction(product?.status?.toLowerCase().includes("harvest") ? "Harvested" : "Field Inspection")
+    setEventNotes("")
+    setEventLocation("")
+  setEventMedia([])
+    setEventError("")
+    setEventSuccess("")
+    setEventTxHash(undefined)
+  }
+
   const canTransfer = useMemo(() => {
     if (!active) return false
     // Allow transfer if the current dashboard user is also the current owner in DB
@@ -129,6 +167,46 @@ export default function FarmerDashboard({ user, profile }) {
       else if (/Blockchain not configured/i.test(msg)) friendly = msg
       else if (/not linked to an on-chain id/i.test(msg)) friendly = "This product is not linked to an on-chain id. Re-sync or recreate the product first."
       setError(friendly)
+    }
+  }
+
+  const submitEvent = async () => {
+    if (!eventModal) return
+    try {
+      setEventError("")
+      setEventSuccess("")
+      if (!PRODUCT_TRACKER_ADDRESS) throw new Error("Blockchain not configured: missing ProductTracker address")
+      if (!eventModal.product_id_onchain) throw new Error("This product is not linked to an on-chain id")
+      if (!eventAction.trim()) throw new Error("Provide an action title for this event")
+
+      const detailPayload = {
+        notes: eventNotes.trim() || undefined,
+        location: eventLocation.trim() || undefined,
+        dashboard: "farmer",
+        media: eventMedia.length > 0 ? eventMedia.map((m) => m.cid) : undefined,
+      }
+      const cleaned = Object.entries(detailPayload).reduce((acc, [key, value]) => {
+        if (value) acc[key] = value
+        return acc
+      }, {})
+      const details = Object.keys(cleaned).length > 0 ? JSON.stringify(cleaned) : eventAction.trim()
+  const ipfsPayload = eventMedia.length > 1 ? JSON.stringify(eventMedia.map((m) => m.cid)) : eventMedia[0]?.cid || ""
+
+      const hash = await writeContractAsync({
+        address: PRODUCT_TRACKER_ADDRESS,
+        abi: ProductTrackerABI,
+        functionName: "addHistoryEvent",
+  args: [BigInt(eventModal.product_id_onchain), eventAction.trim(), details, ipfsPayload],
+      })
+      setEventTxHash(hash)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      let friendly = "Failed to log event"
+      if (/Only current owner/i.test(msg)) friendly = "You are not the current on-chain owner"
+      else if (/linked to an on-chain id/i.test(msg)) friendly = msg
+      else if (/Provide an action/i.test(msg)) friendly = msg
+      else if (/Blockchain not configured/i.test(msg)) friendly = msg
+      setEventError(friendly)
     }
   }
 
@@ -252,47 +330,127 @@ export default function FarmerDashboard({ user, profile }) {
                     <span className="text-muted-foreground">Status:</span> {product.status}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   {product.current_owner_id === user.id ? (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setActive(product)}>
-                          Transfer
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Transfer Product</DialogTitle>
-                          <DialogDescription>
-                            Send ownership on-chain. This will appear instantly in the product journey.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="to">Recipient Address</Label>
-                            <Input id="to" placeholder="0x..." value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
+                    <>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setActive(product)}>
+                            Transfer
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Transfer Product</DialogTitle>
+                            <DialogDescription>
+                              Send ownership on-chain. This will appear instantly in the product journey.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="to">Recipient Address</Label>
+                              <Input id="to" placeholder="0x..." value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label htmlFor="action">Action</Label>
+                              <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label htmlFor="location">Location (optional)</Label>
+                              <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label htmlFor="notes">Notes (optional)</Label>
+                              <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                            </div>
+                            {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded text-sm">{error}</div>}
+                            <div className="flex gap-2">
+                              <Button disabled={!canTransfer || waitingReceipt} onClick={submitTransfer} className="flex-1 bg-primary hover:bg-primary/90">
+                                {waitingReceipt ? "Transferring..." : "Confirm Transfer"}
+                              </Button>
+                            </div>
                           </div>
-                          <div>
-                            <Label htmlFor="action">Action</Label>
-                            <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label htmlFor="location">Location (optional)</Label>
-                            <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label htmlFor="notes">Notes (optional)</Label>
-                            <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                          </div>
-                          {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded text-sm">{error}</div>}
-                          <div className="flex gap-2">
-                            <Button disabled={!canTransfer || waitingReceipt} onClick={submitTransfer} className="flex-1 bg-primary hover:bg-primary/90">
-                              {waitingReceipt ? "Transferring..." : "Confirm Transfer"}
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Dialog
+                        onOpenChange={(open) => {
+                          if (!open && eventModal?.id === product.id) {
+                            setEventModal(null)
+                            resetEventForm()
+                          }
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={() => openEventModal(product)}>
+                            Log Event
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg">
+                          {eventModal?.id === product.id ? (
+                            <>
+                              <DialogHeader>
+                                <DialogTitle>Log Journey Event</DialogTitle>
+                                <DialogDescription>
+                                  Upload media to Pinata first, then paste the CID/URL below to anchor proof on-chain.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label htmlFor="event_action">Action</Label>
+                                  <Input
+                                    id="event_action"
+                                    placeholder="e.g., Harvested, Inspection, Transport"
+                                    value={eventAction}
+                                    onChange={(e) => setEventAction(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="event_notes">Details / Notes</Label>
+                                  <Textarea
+                                    id="event_notes"
+                                    placeholder="Describe what happened. Saved on-chain for the journey timeline."
+                                    value={eventNotes}
+                                    onChange={(e) => setEventNotes(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="event_location">Location (optional)</Label>
+                                  <Input
+                                    id="event_location"
+                                    placeholder="Farm GPS, warehouse, city..."
+                                    value={eventLocation}
+                                    onChange={(e) => setEventLocation(e.target.value)}
+                                  />
+                                </div>
+                                <MediaUploader
+                                  label="Journey Photos"
+                                  description="Upload up to 5 images. We'll pin them via Pinata automatically."
+                                  value={eventMedia}
+                                  onChange={setEventMedia}
+                                />
+                                {eventError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded text-sm">{eventError}</div>}
+                                {eventSuccess && <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded text-sm">{eventSuccess}</div>}
+                                {eventTxHash && (
+                                  <p className="text-xs text-muted-foreground break-all">Tx Hash: {eventTxHash}</p>
+                                )}
+                                <div className="flex gap-2">
+                                  <Button
+                                    disabled={waitingEventReceipt || !eventAction.trim() || !eventModal?.product_id_onchain}
+                                    onClick={submitEvent}
+                                    className="flex-1 bg-primary hover:bg-primary/90"
+                                  >
+                                    {waitingEventReceipt ? "Logging..." : "Log Event"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="py-6 text-sm text-muted-foreground">Select a product to log events.</div>
+                          )}
+                        </DialogContent>
+                      </Dialog>
+                    </>
                   ) : (
                     <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">Transferred</span>
                   )}

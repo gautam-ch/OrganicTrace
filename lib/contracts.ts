@@ -53,17 +53,29 @@ export const CertificationRegistryABI: any[] = [
 
 // Minimal ProductTracker ABI for client write/read flows
 export const ProductTrackerABI: any[] = [
-  {
-    inputs: [
-      { internalType: "string", name: "_productName", type: "string" },
-      { internalType: "uint256", name: "_parentProductId", type: "uint256" },
-      { internalType: "string", name: "_details", type: "string" },
-    ],
-    name: "createProduct",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
+	{
+		inputs: [
+			{ internalType: "string", name: "_productName", type: "string" },
+			{ internalType: "uint256", name: "_parentProductId", type: "uint256" },
+			{ internalType: "string", name: "_details", type: "string" },
+		],
+		name: "createProduct",
+		outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+		stateMutability: "nonpayable",
+		type: "function",
+	},
+	{
+		inputs: [
+			{ internalType: "uint256", name: "_productId", type: "uint256" },
+			{ internalType: "string", name: "_action", type: "string" },
+			{ internalType: "string", name: "_details", type: "string" },
+			{ internalType: "string", name: "_ipfsImageHash", type: "string" },
+		],
+		name: "addHistoryEvent",
+		outputs: [],
+		stateMutability: "nonpayable",
+		type: "function",
+	},
 	{
 		inputs: [
 			{ internalType: "uint256", name: "_productId", type: "uint256" },
@@ -95,6 +107,18 @@ export const ProductTrackerABI: any[] = [
 			{ indexed: false, internalType: "string", name: "action", type: "string" },
 		],
 		name: "ProductTransferred",
+		type: "event",
+	},
+	{
+		anonymous: false,
+		inputs: [
+			{ indexed: true, internalType: "uint256", name: "productId", type: "uint256" },
+			{ indexed: true, internalType: "address", name: "actor", type: "address" },
+			{ indexed: false, internalType: "string", name: "action", type: "string" },
+			{ indexed: false, internalType: "string", name: "details", type: "string" },
+			{ indexed: false, internalType: "string", name: "ipfsImageHash", type: "string" },
+		],
+		name: "HistoryEventAdded",
 		type: "event",
 	},
 ]

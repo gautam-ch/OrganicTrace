@@ -66,16 +66,39 @@ describe("ProductTracker", () => {
       expect(await productTracker.productCounter()).to.equal(3)
     })
 
-    it("Should log creation in history", async () => {
+    it("Should not log history automatically", async () => {
       await productTracker.connect(farmer1).createProduct("Organic Tomatoes", 0, "Harvested fresh from farm")
 
       const historyLength = await productTracker.getHistoryLength(1)
-      expect(historyLength).to.equal(1)
+      expect(historyLength).to.equal(0)
+    })
+  })
 
-      const historyEntry = await productTracker.getHistoryEntry(1, 0)
-      expect(historyEntry.actor).to.equal(farmer1.address)
-      expect(historyEntry.action).to.equal("Harvested")
-      expect(historyEntry.details).to.equal("Harvested fresh from farm")
+  describe("History Events", () => {
+    beforeEach(async () => {
+      await productTracker.connect(farmer1).createProduct("Organic Tomatoes", 0, "Harvested fresh from farm")
+    })
+
+    it("Should allow current owner to add custom events", async () => {
+      const tx = await productTracker
+        .connect(farmer1)
+        .addHistoryEvent(1, "Seeding", "Added seeds to soil", "QmSeedHash")
+
+      await expect(tx)
+        .to.emit(productTracker, "HistoryEventAdded")
+        .withArgs(1, farmer1.address, "Seeding", "Added seeds to soil", "QmSeedHash")
+
+      const entry = await productTracker.getHistoryEntry(1, 0)
+      expect(entry.actor).to.equal(farmer1.address)
+      expect(entry.action).to.equal("Seeding")
+      expect(entry.details).to.equal("Added seeds to soil")
+      expect(entry.ipfsImageHash).to.equal("QmSeedHash")
+    })
+
+    it("Should reject non-owners from adding events", async () => {
+      await expect(
+        productTracker.connect(farmer2).addHistoryEvent(1, "Watering", "Irrigation", "QmWaterHash"),
+      ).to.be.revertedWith("Only current owner can add history")
     })
   })
 
@@ -115,12 +138,13 @@ describe("ProductTracker", () => {
         .transferProduct(1, processor.address, "Transferred to processor", "Processing")
 
       const historyLength = await productTracker.getHistoryLength(1)
-      expect(historyLength).to.equal(2) // Creation + Transfer
+      expect(historyLength).to.equal(1)
 
-      const historyEntry = await productTracker.getHistoryEntry(1, 1)
+      const historyEntry = await productTracker.getHistoryEntry(1, 0)
       expect(historyEntry.actor).to.equal(farmer1.address)
       expect(historyEntry.action).to.equal("Transferred to processor")
       expect(historyEntry.details).to.equal("Processing")
+      expect(historyEntry.ipfsImageHash).to.equal("")
     })
 
     it("Should not allow transfer to zero address", async () => {
@@ -133,6 +157,9 @@ describe("ProductTracker", () => {
   describe("Product Retrieval", () => {
     beforeEach(async () => {
       await productTracker.connect(farmer1).createProduct("Organic Tomatoes", 0, "Harvested fresh from farm")
+      await productTracker
+        .connect(farmer1)
+        .addHistoryEvent(1, "Harvested", "Harvested fresh from farm", "QmHarvestHash")
 
       await productTracker.connect(farmer1).transferProduct(1, processor.address, "Transferred", "Processing")
     })
@@ -142,6 +169,7 @@ describe("ProductTracker", () => {
       expect(product.history.length).to.equal(2)
       expect(product.history[0].action).to.equal("Harvested")
       expect(product.history[1].action).to.equal("Transferred")
+      expect(product.history[0].ipfsImageHash).to.equal("QmHarvestHash")
     })
 
     it("Should retrieve farmer products", async () => {
@@ -154,6 +182,7 @@ describe("ProductTracker", () => {
       const entry = await productTracker.getHistoryEntry(1, 0)
       expect(entry.action).to.equal("Harvested")
       expect(entry.actor).to.equal(farmer1.address)
+      expect(entry.ipfsImageHash).to.equal("QmHarvestHash")
     })
   })
 })

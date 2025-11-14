@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import ConnectButton from "@/components/wallet/connect-button"
+import type { UploadedMedia } from "@/types/media"
+import { toGatewayUrl } from "@/lib/ipfs"
 
 interface ChainProductResponse {
   product: {
@@ -34,6 +36,7 @@ interface ChainProductResponse {
       addressFull: string
       name?: string | null
     } | null
+    media?: UploadedMedia[]
   }
   history: Array<{
     action: string
@@ -42,6 +45,8 @@ interface ChainProductResponse {
     details: string
     productId?: string
     productName?: string
+    ipfsImageHash?: string | null
+    media?: string[]
   }>
 }
 
@@ -122,6 +127,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const { product, history } = data
   const isCertified = product.isFarmerCertified
   const explorerBase = process.env.NEXT_PUBLIC_BLOCK_EXPLORER_BASE || "https://sepolia.etherscan.io"
+  const pinataGateway = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://gateway.pinata.cloud/ipfs"
 
   // --- UI helpers to render friendlier event details instead of raw JSON ---
   const tryParseJSON = (value: string): unknown | null => {
@@ -230,6 +236,45 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     }
     // Fallback to plain text if not JSON
   return <p className="text-sm bg-muted/50 p-3 rounded wrap-break-word">{details}</p>
+  }
+
+  const parseIpfsPayload = (value?: string | null): string[] => {
+    if (!value || !value.trim()) return []
+    const trimmed = value.trim()
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim())
+      }
+    } catch (_) {
+      // not JSON, fall back to single value
+    }
+    return [trimmed]
+  }
+
+  const renderMediaGrid = (cids: string[], caption?: string) => {
+    if (!cids || cids.length === 0) return null
+    return (
+      <div className="space-y-2">
+        {caption && <p className="text-xs uppercase tracking-wide text-muted-foreground">{caption}</p>}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {cids.map((cid) => (
+            <a
+              key={cid}
+              href={toGatewayUrl(cid, pinataGateway)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative block border border-border rounded-lg overflow-hidden"
+            >
+              <img src={toGatewayUrl(cid, pinataGateway)} alt={cid} className="h-28 w-full object-cover transition-transform group-hover:scale-105" />
+              <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/40 to-transparent text-white text-xs px-2 py-1 truncate">
+                View on IPFS
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -389,6 +434,35 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         </Card>
       </section>
 
+      {/* Product Media */}
+      {product.media && product.media.length > 0 && (
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+          <Card className="p-6 border border-border">
+            <h2 className="text-2xl font-bold mb-4">Product Media</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {product.media.map((item) => (
+                <a
+                  key={item.cid}
+                  href={item.gatewayUrl || toGatewayUrl(item.cid, pinataGateway)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative block border border-border rounded-lg overflow-hidden"
+                >
+                  <img
+                    src={item.gatewayUrl || toGatewayUrl(item.cid, pinataGateway)}
+                    alt={item.name || item.cid}
+                    className="h-32 w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/40 to-transparent text-white text-xs px-2 py-1 truncate">
+                    {item.name || item.cid}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
+
       {/* Product Journey (Unified Vertical Timeline) */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
         <div className="mb-8">
@@ -402,6 +476,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-linear-to-b from-border via-border to-transparent" aria-hidden></div>
             <ol className="space-y-8 pl-12">
               {history.map((entry: ChainProductResponse["history"][number], index) => {
+                const mediaCids = entry.media && entry.media.length > 0 ? entry.media : parseIpfsPayload(entry.ipfsImageHash)
                 const prev = index > 0 ? history[index - 1] : null
                 const productChanged = !prev || prev.productId !== entry.productId
                 const isCurrentProduct = entry.productId === product.id
@@ -494,9 +569,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                             <span className="font-mono text-xs">{entry.actor}</span>
                           </div>
 
-                          {entry.details && (
-                            <CollapsibleContent className="mt-4">
-                              {renderDetails(entry.details, entry.action, entry.actor)}
+                          {(entry.details || mediaCids.length > 0) && (
+                            <CollapsibleContent className="mt-4 space-y-4">
+                              {entry.details && renderDetails(entry.details, entry.action, entry.actor)}
+                              {mediaCids.length > 0 && (
+                                <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-4 space-y-3">
+                                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Journey Media</p>
+                                  {renderMediaGrid(mediaCids)}
+                                </div>
+                              )}
                             </CollapsibleContent>
                           )}
                         </div>

@@ -69,8 +69,9 @@ This guide covers deploying the smart contracts to the Sepolia test network and 
 **Purpose**: Creates digital passport for products and tracks lifecycle
 
 **Key Functions**:
-- `createProduct(name, parentId, details)` - Certified farmer creates product
-- `transferProduct(id, newOwner, action, details)` - Transfer product ownership
+- `createProduct(name, parentId, details)` - Certified farmer creates product passport (no history entries)
+- `addHistoryEvent(productId, action, details, ipfsHash)` - Current owner records any journey checkpoint w/ Pinata hash
+- `transferProduct(id, newOwner, action, details)` - Transfer product ownership (still logs transfer step)
 - `getProduct(id)` - Get complete product history
 - `getFarmerProducts(address)` - Get all products from farmer
 

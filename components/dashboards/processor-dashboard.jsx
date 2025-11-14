@@ -12,8 +12,9 @@ import { Label } from "@/components/ui/label"
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi"
 import { readContract } from "wagmi/actions"
 import wagmiConfig from "@/lib/wagmi"
-import { parseEventLogs, isAddress } from "viem"
+import { parseEventLogs } from "viem"
 import { CERT_REGISTRY_ADDRESS, PRODUCT_TRACKER_ADDRESS, CertificationRegistryABI, ProductTrackerABI } from "@/lib/contracts"
+import MediaUploader from "@/components/media/media-uploader"
 
 export default function ProcessorDashboard({ user, profile }) {
   const [receivedProducts, setReceivedProducts] = useState([])
@@ -29,11 +30,21 @@ export default function ProcessorDashboard({ user, profile }) {
   const [details, setDetails] = useState("")
   const [metadata, setMetadata] = useState("")
   const [productType, setProductType] = useState("")
+  const [procMedia, setProcMedia] = useState([])
   const [procError, setProcError] = useState("")
   const [txHash, setTxHash] = useState(undefined)
+  const [eventModal, setEventModal] = useState(null)
+  const [eventAction, setEventAction] = useState("Processing Update")
+  const [eventNotes, setEventNotes] = useState("")
+  const [eventLocation, setEventLocation] = useState("")
+  const [eventMedia, setEventMedia] = useState([])
+  const [eventError, setEventError] = useState("")
+  const [eventSuccess, setEventSuccess] = useState("")
+  const [eventTxHash, setEventTxHash] = useState(undefined)
   const { address } = useAccount()
   const { writeContractAsync } = useWriteContract()
   const { data: receipt, isLoading: waitingReceipt, isSuccess: isMined } = useWaitForTransactionReceipt({ hash: txHash, confirmations: 1 })
+  const { data: eventReceipt, isLoading: waitingEventReceipt, isSuccess: eventMined } = useWaitForTransactionReceipt({ hash: eventTxHash, confirmations: 1 })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -123,6 +134,7 @@ export default function ProcessorDashboard({ user, profile }) {
                 last_tx_hash: receipt.transactionHash,
                 current_owner_address: walletAddress || address || null,
                 blockchain_hash: receipt.transactionHash,
+                media: procMedia,
               },
             ],
             { onConflict: "product_id_onchain" }
@@ -154,12 +166,79 @@ export default function ProcessorDashboard({ user, profile }) {
         setDetails("")
         setMetadata("")
         setProductType("")
+        setProcMedia([])
         setProcError("")
       }
     }
     persist()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMined, receipt])
+  }, [isMined, receipt, procMedia])
+
+  useEffect(() => {
+    if (!eventMined || !eventTxHash) return
+    setEventSuccess("Journey event recorded on-chain.")
+    setEventTxHash(undefined)
+  }, [eventMined, eventTxHash])
+
+  const resetEventForm = () => {
+    setEventAction("Processing Update")
+    setEventNotes("")
+    setEventLocation("")
+    setEventMedia([])
+    setEventError("")
+    setEventSuccess("")
+    setEventTxHash(undefined)
+  }
+
+  const openEventModal = (product) => {
+    setEventModal(product)
+    setEventAction("Processing Update")
+    setEventNotes("")
+    setEventLocation("")
+    setEventMedia([])
+    setEventError("")
+    setEventSuccess("")
+    setEventTxHash(undefined)
+  }
+
+  const submitEvent = async () => {
+    if (!eventModal) return
+    try {
+      setEventError("")
+      setEventSuccess("")
+      if (!PRODUCT_TRACKER_ADDRESS) throw new Error("Blockchain not configured: missing ProductTracker address")
+      if (!eventModal.product_id_onchain) throw new Error("This product is not linked to an on-chain id")
+      if (!eventAction.trim()) throw new Error("Provide an action title for this event")
+
+      const detailPayload = {
+        notes: eventNotes.trim() || undefined,
+        location: eventLocation.trim() || undefined,
+        dashboard: "processor",
+        media: eventMedia.length > 0 ? eventMedia.map((m) => m.cid) : undefined,
+      }
+      const cleaned = Object.entries(detailPayload).reduce((acc, [key, value]) => {
+        if (value) acc[key] = value
+        return acc
+      }, {})
+      const details = Object.keys(cleaned).length > 0 ? JSON.stringify(cleaned) : eventAction.trim()
+      const ipfsPayload = eventMedia.length > 1 ? JSON.stringify(eventMedia.map((m) => m.cid)) : eventMedia[0]?.cid || ""
+
+      const hash = await writeContractAsync({
+        address: PRODUCT_TRACKER_ADDRESS,
+        abi: ProductTrackerABI,
+        functionName: "addHistoryEvent",
+        args: [BigInt(eventModal.product_id_onchain), eventAction.trim(), details, ipfsPayload],
+      })
+      setEventTxHash(hash)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      let friendly = "Failed to log event"
+      if (/Only current owner/i.test(msg)) friendly = "You are not the current on-chain owner"
+      else if (/linked to an on-chain id/i.test(msg)) friendly = msg
+      else if (/Provide an action/i.test(msg)) friendly = msg
+      else if (/Blockchain not configured/i.test(msg)) friendly = msg
+      setEventError(friendly)
+    }
+  }
 
   const submitProcess = async () => {
     try {
@@ -189,6 +268,7 @@ export default function ProcessorDashboard({ user, profile }) {
         parent_product_id: Number(active.product_id_onchain),
         batch_id: batchId,
         processing: details,
+        media: procMedia.map((m) => m.cid),
       })
 
       const hash = await writeContractAsync({
@@ -321,7 +401,7 @@ export default function ProcessorDashboard({ user, profile }) {
                             Process
                           </Button>
                         </DialogTrigger>
-                      <DialogContent className="max-w-lg">
+                      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Create Processed Product</DialogTitle>
                           <DialogDescription>
@@ -349,6 +429,12 @@ export default function ProcessorDashboard({ user, profile }) {
                             <Label htmlFor="meta">Additional Description (Off-Chain, optional)</Label>
                             <textarea id="meta" className="w-full px-3 py-2 border border-input rounded-lg bg-background min-h-24" placeholder="Extra details saved in the database" value={metadata} onChange={(e) => setMetadata(e.target.value)} />
                           </div>
+                          <MediaUploader
+                            label="Processing Photos"
+                            description="Upload up to 5 images documenting this transformation."
+                            value={procMedia}
+                            onChange={setProcMedia}
+                          />
                           {procError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded text-sm">{procError}</div>}
                           <div className="flex gap-2">
                             <Button disabled={waitingReceipt} onClick={submitProcess} className="flex-1 bg-primary hover:bg-primary/90">
@@ -358,13 +444,82 @@ export default function ProcessorDashboard({ user, profile }) {
                         </div>
                       </DialogContent>
                       </Dialog>
-                      {product.id && (
-                        <Link href={`/product/${product.id}/qr`}>
-                        <Badge variant="outline" className="cursor-pointer px-3 py-1 text-xs">
-                          Generate QR
-                        </Badge>
-                        </Link>
-                      )}
+
+                      <Dialog
+                        onOpenChange={(open) => {
+                          if (!open && eventModal?.id === product.id) {
+                            setEventModal(null)
+                            resetEventForm()
+                          }
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={() => openEventModal(product)}>
+                            Log Event
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                          {eventModal?.id === product.id ? (
+                            <>
+                              <DialogHeader>
+                                <DialogTitle>Log Journey Event</DialogTitle>
+                                <DialogDescription>Share processing checkpoints with on-chain proof and media.</DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label htmlFor="event_action">Action</Label>
+                                  <Input
+                                    id="event_action"
+                                    placeholder="Inspection, Packaging, QA..."
+                                    value={eventAction}
+                                    onChange={(e) => setEventAction(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="event_notes">Details / Notes</Label>
+                                  <textarea
+                                    id="event_notes"
+                                    className="w-full px-3 py-2 border border-input rounded-lg bg-background min-h-20"
+                                    placeholder="Describe what happened."
+                                    value={eventNotes}
+                                    onChange={(e) => setEventNotes(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="event_location">Location (optional)</Label>
+                                  <Input
+                                    id="event_location"
+                                    placeholder="Factory, warehouse, city..."
+                                    value={eventLocation}
+                                    onChange={(e) => setEventLocation(e.target.value)}
+                                  />
+                                </div>
+                                <MediaUploader
+                                  label="Journey Photos"
+                                  description="Upload up to 5 images. We'll pin them via Pinata automatically."
+                                  value={eventMedia}
+                                  onChange={setEventMedia}
+                                />
+                                {eventError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded text-sm">{eventError}</div>}
+                                {eventSuccess && <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded text-sm">{eventSuccess}</div>}
+                                {eventTxHash && <p className="text-xs text-muted-foreground break-all">Tx Hash: {eventTxHash}</p>}
+                                <div className="flex gap-2">
+                                  <Button
+                                    disabled={waitingEventReceipt || !eventAction.trim() || !eventModal?.product_id_onchain}
+                                    onClick={submitEvent}
+                                    className="flex-1 bg-primary hover:bg-primary/90"
+                                  >
+                                    {waitingEventReceipt ? "Logging..." : "Log Event"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="py-6 text-sm text-muted-foreground">Select a product to log events.</div>
+                          )}
+                        </DialogContent>
+                      </Dialog>
+                     
                     </>
                   ) : (
                     <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">Not synced on-chain</span>
@@ -401,7 +556,7 @@ export default function ProcessorDashboard({ user, profile }) {
                   <h3 className="font-semibold text-lg">{product.product_name}</h3>
                   {product.id && (
                     <Link href={`/product/${product.id}/qr`}>
-                      <Badge variant="outline" className="cursor-pointer px-3 py-1 text-xs">
+                      <Badge variant="outline" className="cursor-pointer px-3 py-1 text-xs hover:scale-110">
                         Generate QR
                       </Badge>
                     </Link>
