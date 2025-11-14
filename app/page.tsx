@@ -23,7 +23,7 @@ export default function Home() {
   const dashboardHref = isCertifierAddress ? "/certifier-dashboard" : "/dashboard"
   const canShowDashboardLink = Boolean(profile) || isCertifierAddress
   return (
-    <main className="min-h-screen bg-linear-to-b from-background to-muted">
+  <main className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
