@@ -331,7 +331,7 @@ export default function CreateProductPage() {
             </div>
 
             <div>
-              <Label htmlFor="harvest_date">Harvest Date</Label>
+              <Label htmlFor="harvest_date">Event Date</Label>
               <Input
                 id="harvest_date"
                 name="harvest_date"

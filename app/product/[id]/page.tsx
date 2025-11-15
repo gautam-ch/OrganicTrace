@@ -56,6 +56,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set([0])) // First event expanded by default
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const toggleEvent = (index: number) => {
     setExpandedEvents(prev => {
@@ -85,6 +88,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
     fetchProduct()
   }, [id])
+
+  useEffect(() => {
+    setActiveMediaIndex(0)
+  }, [data?.product?.id])
 
   if (loading) {
     return (
@@ -128,6 +135,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const isCertified = product.isFarmerCertified
   const explorerBase = process.env.NEXT_PUBLIC_BLOCK_EXPLORER_BASE || "https://sepolia.etherscan.io"
   const pinataGateway = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://gateway.pinata.cloud/ipfs"
+  const productMedia = product.media ?? []
+  const selectedMedia = productMedia[activeMediaIndex] ?? productMedia[0]
+  const selectedMediaUrl = selectedMedia ? (selectedMedia.gatewayUrl || toGatewayUrl(selectedMedia.cid, pinataGateway)) : null
 
   // --- UI helpers to render friendlier event details instead of raw JSON ---
   const tryParseJSON = (value: string): unknown | null => {
@@ -167,11 +177,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     return "bg-primary"
   }
 
+  const shouldHideDetailKey = (key: string): boolean => {
+    const lower = key.toLowerCase()
+    return lower === "media" || lower.includes("cid") || lower.includes("ipfs")
+  }
+
   const renderDetails = (details: string, action: string, actor?: string) => {
     const parsed = tryParseJSON(details)
     if (parsed && typeof parsed === "object") {
-      const entries = Object.entries(parsed as Record<string, unknown>)
-      if (entries.length === 0) return null
+  const rawEntries = Object.entries(parsed as Record<string, unknown>)
+  if (rawEntries.length === 0) return null
+  const entries = rawEntries.filter(([k]) => !shouldHideDetailKey(k))
       
       // Special rendering for transfer events
       const isTransfer = action.toLowerCase().includes("transfer")
@@ -211,7 +227,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             )}
           </div>
         )
-      }
+  }
+
+  if (entries.length === 0) return null
       
       // Default rendering for other events
       return (
@@ -259,18 +277,24 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         {caption && <p className="text-xs uppercase tracking-wide text-muted-foreground">{caption}</p>}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {cids.map((cid) => (
-            <a
+            <button
               key={cid}
-              href={toGatewayUrl(cid, pinataGateway)}
-              target="_blank"
-              rel="noopener noreferrer"
+              type="button"
+              onClick={() => {
+                setLightboxUrl(toGatewayUrl(cid, pinataGateway))
+                setLightboxOpen(true)
+              }}
               className="group relative block border border-border rounded-lg overflow-hidden"
             >
-              <img src={toGatewayUrl(cid, pinataGateway)} alt={cid} className="h-28 w-full object-cover transition-transform group-hover:scale-105" />
+              <img
+                src={toGatewayUrl(cid, pinataGateway)}
+                alt="Product photo preview"
+                className="h-28 w-full object-cover transition-transform group-hover:scale-105"
+              />
               <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/40 to-transparent text-white text-xs px-2 py-1 truncate">
-                View on IPFS
+                Open full photo
               </div>
-            </a>
+            </button>
           ))}
         </div>
       </div>
@@ -278,7 +302,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-background to-muted">
+    <main className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -298,6 +322,66 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </nav>
+
+      {/* Product visual gallery */}
+      {productMedia.length > 0 && selectedMediaUrl && (
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => {
+                setLightboxUrl(selectedMediaUrl)
+                setLightboxOpen(true)
+              }}
+              className="group relative block aspect-video w-full overflow-hidden rounded-3xl border border-border bg-muted"
+            >
+              <img
+                src={selectedMediaUrl}
+                alt={selectedMedia?.name || "Product photo"}
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-3 bg-linear-to-t from-black/70 via-black/30 to-transparent px-5 py-4 text-white">
+                <div>
+                  <p className="text-sm font-semibold">
+                    {selectedMedia?.name || "Product photo"}
+                  </p>
+                  <p className="text-xs opacity-90">Tap to view the full image</p>
+                </div>
+                <span className="inline-flex items-center gap-1 text-xs font-medium bg-white/20 px-3 py-1 rounded-full">
+                  View full size
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 7l-10 10M8 7h9v9" />
+                  </svg>
+                </span>
+              </div>
+            </button>
+
+            {productMedia.length > 1 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {productMedia.map((mediaItem, mediaIndex) => {
+                  const thumbUrl = mediaItem.gatewayUrl || toGatewayUrl(mediaItem.cid, pinataGateway)
+                  const isActive = mediaIndex === activeMediaIndex
+                  return (
+                    <button
+                      key={mediaItem.cid}
+                      type="button"
+                      onClick={() => setActiveMediaIndex(mediaIndex)}
+                      className={`relative overflow-hidden rounded-xl border transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${isActive ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/60"}`}
+                      aria-label={`Show photo ${mediaIndex + 1}`}
+                    >
+                      <img
+                        src={thumbUrl}
+                        alt={mediaItem.name || `Product photo ${mediaIndex + 1}`}
+                        className="h-24 w-full object-cover"
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Product Header */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -433,36 +517,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </Card>
       </section>
-
-      {/* Product Media */}
-      {product.media && product.media.length > 0 && (
-        <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-          <Card className="p-6 border border-border">
-            <h2 className="text-2xl font-bold mb-4">Product Media</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {product.media.map((item) => (
-                <a
-                  key={item.cid}
-                  href={item.gatewayUrl || toGatewayUrl(item.cid, pinataGateway)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative block border border-border rounded-lg overflow-hidden"
-                >
-                  <img
-                    src={item.gatewayUrl || toGatewayUrl(item.cid, pinataGateway)}
-                    alt={item.name || item.cid}
-                    className="h-32 w-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/40 to-transparent text-white text-xs px-2 py-1 truncate">
-                    {item.name || item.cid}
-                  </div>
-                </a>
-              ))}
-            </div>
-          </Card>
-        </section>
-      )}
-
       {/* Product Journey (Unified Vertical Timeline) */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
         <div className="mb-8">
@@ -574,7 +628,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                               {entry.details && renderDetails(entry.details, entry.action, entry.actor)}
                               {mediaCids.length > 0 && (
                                 <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-4 space-y-3">
-                                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Journey Media</p>
+                                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Photos from this step</p>
                                   {renderMediaGrid(mediaCids)}
                                 </div>
                               )}
@@ -600,6 +654,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       </section>
 
       {/* Footer */}
+      {lightboxUrl && (
+        <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+          <DialogContent className="p-0 max-w-[98vw] w-full sm:max-w-[96vw]">
+            <div className="w-full h-[95vh] flex items-center justify-center bg-background overflow-auto">
+              <img
+                src={lightboxUrl || undefined}
+                alt="Full photo"
+                className="max-w-none h-auto object-contain"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <footer className="border-t border-border bg-muted/50 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-muted-foreground text-sm">
           <p>OrganicTrace - All data is verified and stored securely</p>
