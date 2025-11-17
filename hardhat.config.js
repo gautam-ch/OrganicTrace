@@ -9,9 +9,13 @@ try {
 
 require("@nomicfoundation/hardhat-toolbox")
 require("@nomicfoundation/hardhat-verify")
+// Load environment variables (prefer explicit .env, but allow process env overrides)
 require("dotenv").config()
+const fs = require("fs")
 
-const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL
+// Allow several env var names to be used so local .env.local or NEXT_PUBLIC_* values work
+const SEPOLIA_RPC_URL =process.env.ETHEREUM_RPC_URL
+// PRIVATE_KEY can be set directly or via a DEPLOYER_PRIVATE_KEY alias
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY
 
