@@ -745,12 +745,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       {/* Footer */}
       {lightboxUrl && (
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent className="p-0 max-w-[98vw] w-full sm:max-w-[96vw]">
-            <div className="w-full h-[95vh] flex items-center justify-center bg-background overflow-auto">
+          <DialogContent className="p-0 w-[96vw] max-w-[96vw] sm:max-w-5xl border-none bg-transparent shadow-none">
+            <div className="w-full h-full max-h-[88vh] sm:max-h-[90vh] rounded-2xl bg-background flex items-center justify-center overflow-hidden">
               <img
                 src={lightboxUrl || undefined}
                 alt="Full photo"
-                className="max-w-none h-auto object-contain"
+                className="block w-auto max-w-full max-h-full object-contain"
               />
             </div>
           </DialogContent>
