@@ -3,6 +3,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import ConnectButton from "@/components/wallet/connect-button"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import MenuIcon from "@/components/icons/menu-icon"
 import { useProfile } from "@/components/auth/profile-context"
 import { useAccount, useReadContract } from "wagmi"
 import { CertificationRegistryABI, CERT_REGISTRY_ADDRESS } from "@/lib/contracts"
@@ -26,26 +28,62 @@ export default function Home() {
   <main className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-base sm:text-lg">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-primary-foreground font-bold">OT</span>
             </div>
             <span className="font-semibold text-lg">OrganicTrace</span>
           </div>
-          <div className="flex gap-3 items-center">
-            <ConnectButton fixed={false} />
-            {canShowDashboardLink ? (
-              <>
-                <Link href={dashboardHref}>
-                  <Button variant="outline">Dashboard</Button>
-                </Link>
-              </>
-            ) : (
-              <>
-                {/* Wallet-first: prompting connect via ConnectButton */}
-              </>
+          <div className="hidden md:flex items-center gap-3">
+            <Link href="/product">
+              <Button variant="ghost" size="sm">
+                Scan Product
+              </Button>
+            </Link>
+            {canShowDashboardLink && (
+              <Link href={dashboardHref}>
+                <Button variant="ghost" size="sm">
+                  Dashboard
+                </Button>
+              </Link>
             )}
+            <ConnectButton fixed={false} />
+          </div>
+          <div className="md:hidden flex items-center gap-3">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="rounded-full">
+                  <MenuIcon className="w-5 h-5" />
+                  <span className="sr-only">Open navigation</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[85vw] max-w-sm">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                      <span className="text-primary-foreground font-bold">OT</span>
+                    </div>
+                    <span>OrganicTrace</span>
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 flex flex-col gap-4">
+                  <Link href="/product">
+                    <Button className="w-full" variant="outline">
+                      Scan Product
+                    </Button>
+                  </Link>
+                  {canShowDashboardLink && (
+                    <Link href={dashboardHref}>
+                      <Button className="w-full" variant="outline">
+                        Dashboard
+                      </Button>
+                    </Link>
+                  )}
+                  <ConnectButton fixed={false} fullWidthOnMobile className="w-full" />
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
@@ -58,17 +96,17 @@ export default function Home() {
             Blockchain-powered traceability ensures complete transparency and authenticity of organic products. Every
             step, verified and secure.
           </p>
-          <div className="flex gap-4 justify-center pt-4">
-            {!profile && <ConnectButton fixed={false} />}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+            {!profile && <ConnectButton fixed={false} fullWidthOnMobile />}
             {canShowDashboardLink && (
               <Link href={dashboardHref}>
-                <Button size="lg" className="bg-primary hover:bg-primary/90">
+                <Button size="lg" className="bg-primary hover:bg-primary/90 w-full sm:w-auto">
                   Go to Dashboard
                 </Button>
               </Link>
             )}
             <Link href="/product">
-              <Button size="lg" variant="outline">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Scan Product
               </Button>
             </Link>

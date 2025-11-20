@@ -219,10 +219,10 @@ export default function FarmerDashboard({ user, profile }) {
     <main className="min-h-screen bg-linear-to-b from-background to-muted">
 
       {/* Dashboard Header */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Farmer Dashboard</h1>
-          <p className="text-lg text-muted-foreground">Manage your products and certifications</p>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-10 sm:py-12">
+        <div className="space-y-2 text-center sm:text-left">
+          <h1 className="text-3xl font-bold sm:text-4xl">Farmer Dashboard</h1>
+          <p className="text-base sm:text-lg text-muted-foreground">Manage your products and certifications</p>
         </div>
       </section>
 
@@ -244,14 +244,14 @@ export default function FarmerDashboard({ user, profile }) {
 
       {/* Certifications Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
           <h2 className="text-2xl font-bold">Organic Certifications</h2>
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard/request-certification">
-              <Button className="bg-primary hover:bg-primary/90">+ Request Certification</Button>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full lg:w-auto">
+            <Link href="/dashboard/request-certification" className="w-full sm:w-auto">
+              <Button className="w-full bg-primary hover:bg-primary/90">+ Request Certification</Button>
             </Link>
-            <Link href="/dashboard/certification-status">
-              <Button variant="outline">Check Status</Button>
+            <Link href="/dashboard/certification-status" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full">Check Status</Button>
             </Link>
           </div>
         </div>
@@ -261,7 +261,7 @@ export default function FarmerDashboard({ user, profile }) {
             <p className="text-muted-foreground">Loading...</p>
           </Card>
         ) : certifications.length > 0 ? (
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {certifications.map((cert) => (
               <Card key={cert.id} className="p-6 border border-border">
                 <h3 className="font-semibold mb-2">{cert.certification_body || "Organic Certification"}</h3>
@@ -309,15 +309,15 @@ export default function FarmerDashboard({ user, profile }) {
 
       {/* Products Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <h2 className="text-2xl font-bold">Your Products</h2>
-          <Link href="/dashboard/create-product">
-            <Button className="bg-primary hover:bg-primary/90">+ Create Product</Button>
+          <Link href="/dashboard/create-product" className="w-full md:w-auto">
+            <Button className="w-full bg-primary hover:bg-primary/90">+ Create Product</Button>
           </Link>
         </div>
 
         {products.length > 0 ? (
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {products.map((product) => (
               <Card key={product.id} className="p-6 border border-border hover:border-primary transition-colors">
                 <h3 className="font-semibold text-lg mb-2">{product.product_name}</h3>
@@ -339,7 +339,7 @@ export default function FarmerDashboard({ user, profile }) {
                             Transfer
                           </Button>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent className="w-full max-w-md sm:max-w-lg">
                           <DialogHeader>
                             <DialogTitle>Transfer Product</DialogTitle>
                             <DialogDescription>
@@ -386,7 +386,7 @@ export default function FarmerDashboard({ user, profile }) {
                             Log Event
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-lg">
+                        <DialogContent className="w-full max-w-lg sm:max-w-2xl">
                           {eventModal?.id === product.id ? (
                             <>
                               <DialogHeader>

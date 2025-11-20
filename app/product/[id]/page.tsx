@@ -7,6 +7,9 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import ConnectButton from "@/components/wallet/connect-button"
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import MenuIcon from "@/components/icons/menu-icon"
+import { cn } from "@/lib/utils"
 import type { UploadedMedia } from "@/types/media"
 import { toGatewayUrl } from "@/lib/ipfs"
 
@@ -107,16 +110,54 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   if (error || !data) {
     return (
       <main className="min-h-screen bg-background">
-        <nav className="border-b border-border bg-background/80 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
             <Link href="/" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-primary-foreground font-bold">OT</span>
               </div>
               <span className="font-semibold">OrganicTrace</span>
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-3">
               <ConnectButton fixed={false} />
+              <Link href="/product">
+                <Button variant="outline" size="sm">
+                  Back to Search
+                </Button>
+              </Link>
+            </div>
+            <div className="md:hidden flex items-center gap-3">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon" className="rounded-full">
+                    <MenuIcon className="w-5 h-5" />
+                    <span className="sr-only">Open navigation</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[88vw] max-w-sm px-0">
+                  <SheetHeader className="border-b border-border pb-4 px-4">
+                    <SheetTitle className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                        <span className="text-primary-foreground font-bold">OT</span>
+                      </div>
+                      <span>OrganicTrace</span>
+                    </SheetTitle>
+                  </SheetHeader>
+                  <div className="flex flex-col gap-4 px-4 py-6">
+                    <SheetClose asChild>
+                      <Link href="/product" className="w-full">
+                        <Button className="w-full" variant="outline">
+                          Back to Search
+                        </Button>
+                      </Link>
+                    </SheetClose>
+                    <div className="rounded-2xl border border-border/60 bg-muted/40 p-4">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Wallet</p>
+                      <ConnectButton fixed={false} fullWidthOnMobile className="w-full" />
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
         </nav>
@@ -175,6 +216,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     if (lower.includes("process")) return "bg-purple-500"
     if (lower.includes("certif")) return "bg-emerald-500"
     return "bg-primary"
+  }
+
+  const getEventBadge = (action: string) => {
+    const lower = action.toLowerCase()
+    if (lower.includes("harvest")) return { label: "Origin", className: "bg-emerald-100 text-emerald-700" }
+    if (lower.includes("transfer")) return { label: "Movement", className: "bg-blue-100 text-blue-700" }
+    if (lower.includes("process")) return { label: "Processed", className: "bg-purple-100 text-purple-700" }
+    if (lower.includes("certif")) return { label: "Certified", className: "bg-green-100 text-green-700" }
+    return { label: "Update", className: "bg-secondary/80 text-secondary-foreground" }
   }
 
   const shouldHideDetailKey = (key: string): boolean => {
@@ -305,20 +355,53 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     <main className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-primary-foreground font-bold">OT</span>
             </div>
             <span className="font-semibold">OrganicTrace</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             <ConnectButton fixed={false} />
             <Link href="/product">
               <Button variant="outline" size="sm">
                 Back to Search
               </Button>
             </Link>
+          </div>
+          <div className="md:hidden flex items-center gap-3">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="rounded-full">
+                  <MenuIcon className="w-5 h-5" />
+                  <span className="sr-only">Open navigation</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[88vw] max-w-sm px-0">
+                <SheetHeader className="border-b border-border pb-4 px-4">
+                  <SheetTitle className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                      <span className="text-primary-foreground font-bold">OT</span>
+                    </div>
+                    <span>OrganicTrace</span>
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-col gap-4 px-4 py-6">
+                  <SheetClose asChild>
+                    <Link href="/product" className="w-full">
+                      <Button className="w-full" variant="outline">
+                        Back to Search
+                      </Button>
+                    </Link>
+                  </SheetClose>
+                  <div className="rounded-2xl border border-border/60 bg-muted/40 p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Wallet</p>
+                    <ConnectButton fixed={false} fullWidthOnMobile className="w-full" />
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
@@ -525,10 +608,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {history && history.length > 0 ? (
-          <div className="relative">
+          <div className="relative pt-1">
             {/* Timeline rail */}
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-linear-to-b from-border via-border to-transparent" aria-hidden></div>
-            <ol className="space-y-8 pl-12">
+            <div className="absolute left-5 sm:left-6 top-0 bottom-0 w-px bg-linear-to-b from-border via-border to-transparent" aria-hidden></div>
+            <ol className="space-y-6 sm:space-y-8 pl-10 sm:pl-14">
               {history.map((entry: ChainProductResponse["history"][number], index) => {
                 const mediaCids = entry.media && entry.media.length > 0 ? entry.media : parseIpfsPayload(entry.ipfsImageHash)
                 const prev = index > 0 ? history[index - 1] : null
@@ -536,6 +619,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 const isCurrentProduct = entry.productId === product.id
                 const eventIcon = getEventIcon(entry.action)
                 const eventColor = getEventColor(entry.action)
+                const badge = getEventBadge(entry.action)
                 
                 // Calculate time since previous event
                 let timeSincePrev = ""
@@ -559,22 +643,22 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 }
 
                 return (
-                  <li key={`${entry.action}-${index}`} className="relative group">
+                  <li key={`${entry.action}-${index}`} className="relative group pl-2 sm:pl-0">
                     {/* Node with icon */}
-                    <div className={`absolute -left-4 -top-1 w-9 h-9 rounded-full ${eventColor} border-4 border-background shadow-lg flex items-center justify-center text-white text-base transition-transform group-hover:scale-110 ${index === 0 ? 'animate-pulse-subtle' : ''}`}>
+                    <div className={`absolute -left-2 sm:-left-4 top-0 sm:-top-1 w-8 h-8 sm:w-9 sm:h-9 rounded-full ${eventColor} border-4 border-background shadow-lg flex items-center justify-center text-white text-base transition-transform group-hover:scale-110 ${index === 0 ? 'animate-pulse-subtle' : ''}`}>
                       {eventIcon}
                     </div>
                     
                     {/* Time indicator */}
                     {timeSincePrev && (
-                      <div className="absolute -left-1 -top-4 text-xs text-muted-foreground italic">
+                      <div className="absolute left-2 sm:left-1 -top-4 text-[11px] text-muted-foreground italic">
                         {timeSincePrev}
                       </div>
                     )}
 
                     <Collapsible open={expandedEvents.has(index)} onOpenChange={() => toggleEvent(index)}>
-                      <div className="rounded-lg border border-border bg-card shadow-sm hover:shadow-md transition-all group-hover:border-primary/30">
-                        <div className="p-5">
+                      <div className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all group-hover:border-primary/40">
+                        <div className="p-4 sm:p-5">
                           {/* Product label only when product changes (first or parent→child) */}
                           {productChanged && (
                             <div className="mb-3 pb-3 border-b border-border">
@@ -596,19 +680,24 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
                           <CollapsibleTrigger asChild>
                             <button className="w-full text-left hover:opacity-80 transition-opacity">
-                              <div className="flex items-start justify-between gap-4 mb-3">
-                                <div className="flex items-center gap-3">
-                                  <h3 className="font-semibold text-lg">{entry.action}</h3>
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                                    {entry.action.toLowerCase().includes("harvest") ? "Origin" : entry.action.toLowerCase().includes("transfer") ? "Movement" : "Processed Food"}
-                                  </span>
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="font-semibold text-base sm:text-lg">{entry.action}</h3>
+                                    <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold", badge.className)}>
+                                      {badge.label}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <span>{isCurrentProduct ? "Current batch" : "Linked batch"}</span>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 self-end sm:self-auto">
                                   <time className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap font-medium">{entry.timestamp}</time>
-                                  <svg 
-                                    className={`w-4 h-4 text-muted-foreground transition-transform ${expandedEvents.has(index) ? 'rotate-180' : ''}`} 
-                                    fill="none" 
-                                    stroke="currentColor" 
+                                  <svg
+                                    className={`w-4 h-4 text-muted-foreground transition-transform ${expandedEvents.has(index) ? 'rotate-180' : ''}`}
+                                    fill="none"
+                                    stroke="currentColor"
                                     viewBox="0 0 24 24"
                                   >
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -618,13 +707,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                             </button>
                           </CollapsibleTrigger>
                           
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="font-medium">Owner:</span>
-                            <span className="font-mono text-xs">{entry.actor}</span>
+                          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                            <span className="font-medium uppercase tracking-wide">Owner</span>
+                            <span className="font-mono text-[11px] sm:text-xs break-all">{entry.actor}</span>
                           </div>
 
                           {(entry.details || mediaCids.length > 0) && (
-                            <CollapsibleContent className="mt-4 space-y-4">
+                            <CollapsibleContent className="mt-4 space-y-4 border-t border-border/60 pt-4">
                               {entry.details && renderDetails(entry.details, entry.action, entry.actor)}
                               {mediaCids.length > 0 && (
                                 <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-4 space-y-3">
