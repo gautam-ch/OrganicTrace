@@ -348,7 +348,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (isOriginCertified) {
       const details = await getCertificationDetails(originFarmerAddress)
-      const proof = await getCertificationGrantProof(originFarmerAddress)
+      const proof = await getCertificationGrantProof(originFarmerAddress, details?.grantedAt)
       if (details) {
         certification = {
           certifier: proof?.certifier ? formatAddress(proof.certifier) : "Unknown",

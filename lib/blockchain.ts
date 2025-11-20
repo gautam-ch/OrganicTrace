@@ -86,16 +86,34 @@ export async function getCertificationDetails(farmerAddress: string) {
  * Find the most recent CertificationGranted event for a farmer to extract the
  * certifier address and tx hash. Falls back to nulls if none are found.
  */
-export async function getCertificationGrantProof(farmerAddress: string) {
+export async function getCertificationGrantProof(farmerAddress: string, grantedAtTimestamp?: string | number) {
   try {
     const iface = new ethers.Interface(CERT_REGISTRY_ABI)
     const topic0 = ethers.id("CertificationGranted(address,address,uint256)")
     const farmerTopic = ethers.zeroPadValue(ethers.getAddress(farmerAddress), 32)
 
+    let fromBlock = 0
+    let toBlock: string | number = "latest"
+
+    // Optimization: If we know the timestamp, estimate the block number to avoid scanning full history
+    if (grantedAtTimestamp) {
+      try {
+        const targetTime = Number(grantedAtTimestamp)
+        const blockNumber = await findBlockByTimestamp(targetTime)
+        
+        // Search a very small window around the found block to satisfy strict RPC limits (10 blocks)
+        // We search [blockNumber - 4, blockNumber + 4] which is 9 blocks.
+        fromBlock = Math.max(0, blockNumber - 4)
+        toBlock = blockNumber + 4
+      } catch (e) {
+        console.warn("Failed to find block by timestamp, falling back to full scan", e)
+      }
+    }
+
     const logs = await provider.getLogs({
       address: CERT_REGISTRY_ADDRESS,
-      fromBlock: 0,
-      toBlock: "latest",
+      fromBlock,
+      toBlock,
       topics: [topic0, farmerTopic],
     })
 
@@ -164,4 +182,27 @@ export function formatDate(timestamp: string | number): string {
     month: "short",
     day: "numeric",
   })
+}
+
+async function findBlockByTimestamp(targetTimestamp: number): Promise<number> {
+  let min = 0
+  let max = await provider.getBlockNumber()
+  
+  while (min <= max) {
+    const mid = Math.floor((min + max) / 2)
+    const block = await provider.getBlock(mid)
+    if (!block) {
+      min = mid + 1
+      continue
+    }
+
+    if (block.timestamp === targetTimestamp) return mid
+    
+    if (block.timestamp < targetTimestamp) {
+      min = mid + 1
+    } else {
+      max = mid - 1
+    }
+  }
+  return min
 }
