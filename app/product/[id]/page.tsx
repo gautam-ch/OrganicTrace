@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogOverlay, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import ConnectButton from "@/components/wallet/connect-button"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -153,7 +153,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </SheetClose>
                     <div className="rounded-2xl border border-border/60 bg-muted/40 p-4">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Wallet</p>
-                      <ConnectButton fixed={false} fullWidthOnMobile className="w-full" />
+                      <ConnectButton fixed={false}  className="w-full" />
                     </div>
                   </div>
                 </SheetContent>
@@ -192,6 +192,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const toTitle = (key: string): string => {
+    // map specific keys to friendlier labels
+    const lower = key.toLowerCase().trim()
+    if (lower === "notes" || lower === "note") return "Description"
+
     // handle snake_case or camelCase -> Title Case
     const spaced = key
       .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -218,18 +222,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     return "bg-primary"
   }
 
-  const getEventBadge = (action: string) => {
-    const lower = action.toLowerCase()
-    if (lower.includes("harvest")) return { label: "Origin", className: "bg-emerald-100 text-emerald-700" }
-    if (lower.includes("transfer")) return { label: "Movement", className: "bg-blue-100 text-blue-700" }
-    if (lower.includes("process")) return { label: "Processed", className: "bg-purple-100 text-purple-700" }
-    if (lower.includes("certif")) return { label: "Certified", className: "bg-green-100 text-green-700" }
-    return { label: "Update", className: "bg-secondary/80 text-secondary-foreground" }
-  }
-
   const shouldHideDetailKey = (key: string): boolean => {
     const lower = key.toLowerCase()
-    return lower === "media" || lower.includes("cid") || lower.includes("ipfs")
+    return lower === "media" || lower.includes("cid") || lower.includes("ipfs") || lower === "dashboard"
   }
 
   const renderDetails = (details: string, action: string, actor?: string) => {
@@ -292,7 +287,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 ? JSON.stringify(v)
                 : String(v)
               return (
-                <div key={k} className="p-3 border-t first:border-t-0 sm:first:border-t sm:border-l-0 border-border">
+                <div key={k} className="p-3 border-t first:border-t-0 sm:even:border-l border-border">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{toTitle(k)}</p>
                   <p className="text-sm font-medium wrap-break-word">{value}</p>
                 </div>
@@ -303,7 +298,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       )
     }
     // Fallback to plain text if not JSON
-  return <p className="text-sm bg-muted/50 p-3 rounded wrap-break-word">{details}</p>
+    return (
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Description</p>
+        <p className="text-sm bg-muted/50 p-3 rounded wrap-break-word">{details}</p>
+      </div>
+    )
   }
 
   const parseIpfsPayload = (value?: string | null): string[] => {
@@ -397,7 +397,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   </SheetClose>
                   <div className="rounded-2xl border border-border/60 bg-muted/40 p-4">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Wallet</p>
-                    <ConnectButton fixed={false} fullWidthOnMobile className="w-full" />
+                    <ConnectButton fixed={false}  className="w-full" />
                   </div>
                 </div>
               </SheetContent>
@@ -604,7 +604,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-2">Product Journey</h2>
-          
         </div>
 
         {history && history.length > 0 ? (
@@ -619,7 +618,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 const isCurrentProduct = entry.productId === product.id
                 const eventIcon = getEventIcon(entry.action)
                 const eventColor = getEventColor(entry.action)
-                const badge = getEventBadge(entry.action)
                 
                 // Calculate time since previous event
                 let timeSincePrev = ""
@@ -684,12 +682,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                                 <div className="flex flex-col gap-2">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <h3 className="font-semibold text-base sm:text-lg">{entry.action}</h3>
-                                    <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold", badge.className)}>
-                                      {badge.label}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                    <span>{isCurrentProduct ? "Current batch" : "Linked batch"}</span>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -745,14 +737,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       {/* Footer */}
       {lightboxUrl && (
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent className="p-0 w-[96vw] max-w-[96vw] sm:max-w-5xl border-none bg-transparent shadow-none">
-            <div className="w-full h-full max-h-[88vh] sm:max-h-[90vh] rounded-2xl bg-background flex items-center justify-center overflow-hidden">
-              <img
-                src={lightboxUrl || undefined}
-                alt="Full photo"
-                className="block w-auto max-w-full max-h-full object-contain"
-              />
-            </div>
+          <DialogOverlay className="bg-black/60 backdrop-blur-md" />
+          <DialogContent className="p-0 w-screen h-screen max-w-none border-none bg-transparent flex items-center justify-center">
+            <img
+              src={lightboxUrl || undefined}
+              alt="Full photo"
+              className="max-w-[90vw] max-h-[90vh] object-contain"
+            />
           </DialogContent>
         </Dialog>
       )}

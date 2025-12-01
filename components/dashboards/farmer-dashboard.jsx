@@ -391,9 +391,6 @@ export default function FarmerDashboard({ user, profile }) {
                             <>
                               <DialogHeader>
                                 <DialogTitle>Log Journey Event</DialogTitle>
-                                <DialogDescription>
-                                  Upload media to Pinata first, then paste the CID/URL below to anchor proof on-chain.
-                                </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div>
@@ -425,7 +422,7 @@ export default function FarmerDashboard({ user, profile }) {
                                 </div>
                                 <MediaUploader
                                   label="Journey Photos"
-                                  description="Upload up to 5 images. We'll pin them via Pinata automatically."
+                                  description="Upload up to 5 images."
                                   value={eventMedia}
                                   onChange={setEventMedia}
                                 />
