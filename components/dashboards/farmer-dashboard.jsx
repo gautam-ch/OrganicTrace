@@ -83,17 +83,18 @@ export default function FarmerDashboard({ user, profile }) {
       try {
         // Try to map recipient wallet to an existing user profile
         let toUserId = null
-        const { data: prof } = await supabase.from("profiles").select("id").eq("wallet_address", toAddress).maybeSingle()
+        const normalizedAddress = toAddress.toLowerCase()
+        const { data: prof } = await supabase.from("profiles").select("id").eq("wallet_address", normalizedAddress).maybeSingle()
         toUserId = prof?.id || null
 
         // Update our products table: owner id (if known), owner address always, status in_transit
         await supabase
           .from("products")
-          .update({ current_owner_id: toUserId, current_owner_address: toAddress, status: "in_transit" })
+          .update({ current_owner_id: toUserId, current_owner_address: normalizedAddress, status: "in_transit" })
           .eq("id", active.id)
 
         // Optimistically update UI list
-        setProducts((prev) => prev.map((p) => (p.id === active.id ? { ...p, current_owner_id: toUserId, current_owner_address: toAddress, status: "in_transit" } : p)))
+        setProducts((prev) => prev.map((p) => (p.id === active.id ? { ...p, current_owner_id: toUserId, current_owner_address: normalizedAddress, status: "in_transit" } : p)))
       } catch (e) {
         // Non-blocking
       } finally {

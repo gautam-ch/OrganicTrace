@@ -63,7 +63,7 @@ export default function ProcessorDashboard({ user, profile }) {
             .from("products")
             .select("*")
             .is("current_owner_id", null)
-            .eq("current_owner_address", walletAddress)
+            .ilike("current_owner_address", walletAddress)
             .neq("status", "processed")
           byWallet = byAddr || []
 
