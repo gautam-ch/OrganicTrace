@@ -1,31 +1,15 @@
-# OrganicTrace - Blockchain-Powered Organic Product Traceability
+# OrganicTrace
 
-A comprehensive platform for tracking organic products from farm to consumer with complete transparency and authenticity verification.
+A blockchain-powered platform for tracking organic products from farm to consumer, ensuring transparency and authenticity verification.
 
-## Features
+## Purpose
 
-### 1. Traceability Mechanism
-- Complete product lifecycle tracking from harvest to retail
-- Recording of farming practices, processing, distribution, and retail stages
-- Immutable movement history for each product
-- Environmental data tracking (temperature, humidity)
+OrganicTrace provides complete traceability for organic products, allowing consumers to verify the authenticity of organic certifications and track the product journey from farm to table. Key features include:
 
-### 2. Certification Verification
-- Secure storage and verification of organic certifications
-- Support for multiple certification bodies and standards
-- Expiry date tracking and validation
-- Issuer verification and credential management
-
-### 3. Consumer Engagement Platform
-- QR code scanning for instant product information
-- Complete supply chain visualization
-- Farmer and processor information display
-- Real-time certification status
-
-### 4. Role-Based Dashboards
-- **Farmers**: Create products, manage certifications, track shipments
-- **Processors**: Receive products, record processing activities, transfer to retailers
-- **Consumers**: Verify products, view certifications, track origin
+- **Traceability Mechanism**: Complete product lifecycle tracking from harvest to retail, including farming practices, processing, distribution, and retail stages, with immutable movement history and environmental data tracking.
+- **Certification Verification**: Secure storage and verification of organic certifications, supporting multiple certification bodies and standards, with expiry tracking and issuer verification.
+- **Consumer Engagement**: QR code scanning for instant product information, supply chain visualization, and real-time certification status.
+- **Role-Based Dashboards**: Dedicated interfaces for farmers (create products, manage certifications), processors (record processing activities), and consumers (verify products and view origins).
 
 ## Technology Stack
 
@@ -33,103 +17,10 @@ A comprehensive platform for tracking organic products from farm to consumer wit
 - **Backend**: Next.js API Routes, Server Actions
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth
-- **Security**: Row-Level Security (RLS) policies
+- **Blockchain**: Hardhat, Solidity smart contracts
+- **Storage**: IPFS via Pinata for media and documents
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- Supabase account
-- Vercel account (for deployment)
-
-### Installation
-
-1. **Clone the repository**
-\`\`\`bash
-git clone <repository-url>
-cd organic-product-tracker
-\`\`\`
-
-2. **Install dependencies**
-\`\`\`bash
-npm install
-\`\`\`
-
-3. **Set up environment variables**
-
-Create a `.env.local` file with:
-\`\`\`
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=http://localhost:3000
-\`\`\`
-
-4. **Set up the database**
-
-The database schema is defined in `scripts/001_init-schema.sql`. Run this script in your Supabase SQL editor to create all necessary tables and policies.
-
-5. **Run the development server**
-\`\`\`bash
-npm run dev
-\`\`\`
-
-Visit http://localhost:3000 to see the application.
-
-## Project Structure
-
-\`\`\`
-app/
-├── auth/                          # Authentication pages
-│   ├── login/page.tsx
-│   ├── signup/page.tsx
-│   └── signup-success/page.tsx
-├── dashboard/                     # User dashboards
-│   ├── page.tsx
-│   ├── create-product/page.tsx
-│   └── add-certification/page.tsx
-├── product/                       # Product pages
-│   ├── page.tsx
-│   └── [id]/page.tsx
-├── api/                           # API routes
-│   ├── products/
-│   ├── certifications/
-│   └── ...
-├── globals.css                    # Global styles
-└── layout.tsx                     # Root layout
-
-lib/
-├── supabase/
-│   ├── client.ts                 # Client-side Supabase
-│   ├── server.ts                 # Server-side Supabase
-│   └── middleware.ts             # Authentication middleware
-├── auth.ts                        # Auth utilities
-└── blockchain.ts                 # Blockchain interactions
-
-components/
-├── ui/                            # shadcn/ui components
-└── dashboards/                    # Role-specific dashboards
-    ├── farmer-dashboard.tsx
-    ├── processor-dashboard.tsx
-    └── consumer-dashboard.tsx
-
-scripts/
-└── 001_init-schema.sql           # Database schema
-\`\`\`
-
-## Database Schema
-
-The system uses Supabase PostgreSQL with Row-Level Security (RLS):
-
-### Tables
-
-1. **profiles**: User profiles with role information
-2. **certifications**: Organic certifications with verification status
-3. **products**: Product records with farmer and ownership information
-4. **product_movements**: Supply chain movement history
-
-## User Workflows
+## Workflow
 
 ### Farmer Workflow
 1. Create account and register as farmer
@@ -149,61 +40,49 @@ The system uses Supabase PostgreSQL with Row-Level Security (RLS):
 3. View complete product history
 4. Verify organic certifications
 
-## API Endpoints
+## Locally Setup
 
-### Products
-- `GET /api/products/[id]` - Get product details
-- `POST /api/products` - Create new product
-- `POST /api/products/[id]/transfer` - Transfer product ownership
+### Prerequisites
+- Node.js 18+
+- npm or pnpm
+- Supabase account
+- Pinata account (for IPFS storage)
 
-### Certifications
-- `POST /api/certifications/verify` - Verify certifications
+### Installation
 
-### Authentication
-- `POST /api/auth/signup` - Create account
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd organictrace
+   ```
 
-## Security Considerations
+2. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
 
-1. **Authentication**: Supabase Auth with email/password
-2. **Data Encryption**: Sensitive data encrypted at rest in Supabase
-3. **Session Management**: Secure cookie-based sessions
-4. **CORS**: Properly configured for API security
+3. **Set up environment variables**
 
-## Deployment
+   Create a `.env.local` file with:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=http://localhost:3000
+   PINATA_API_KEY=your_pinata_api_key
+   PINATA_SECRET_API_KEY=your_pinata_secret_key
+   ```
 
-### Deploy to Vercel
+4. **Set up the database**
 
-1. Push code to GitHub
-2. Connect repository to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy automatically on push
+   Run the SQL scripts in `scripts/` in order in your Supabase SQL editor to create tables and policies.
 
-\`\`\`bash
-vercel deploy
-\`\`\`
+5. **Set up blockchain (optional)**
 
-## Contributing
+   Follow the instructions in `HARDHAT_SETUP.md` to deploy smart contracts locally.
 
-Contributions are welcome! Please follow these guidelines:
-1. Create a feature branch
-2. Make your changes
-3. Submit a pull request
+6. **Run the development server**
+   ```bash
+   pnpm run dev
+   ```
 
-## License
-
-MIT License - see LICENSE file for details
-
-## Support
-
-For support, please contact support@organictrace.com or create an issue on GitHub.
-
-## Roadmap
-
-- QR code generation for products
-- Blockchain integration with smart contracts
-- Mobile app (iOS/Android)
-- Advanced analytics and reporting
-- Integration with major organic certification bodies
-- Multi-language support
+   Visit http://localhost:3000 to see the application.
