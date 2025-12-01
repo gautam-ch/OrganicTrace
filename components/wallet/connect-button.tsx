@@ -18,10 +18,9 @@ const CERTIFIER_REDIRECT_KEY = "certifierRedirected"
 type ConnectButtonProps = {
   fixed?: boolean
   className?: string
-  fullWidthOnMobile?: boolean
 }
 
-export default function ConnectButton({ fixed = true, className = "", fullWidthOnMobile = false }: ConnectButtonProps) {
+export default function ConnectButton({ fixed = true, className = "" }: ConnectButtonProps) {
   const { address, isConnected, isConnecting } = useAccount()
   const router = useRouter()
   const pathname = usePathname()
@@ -111,15 +110,12 @@ export default function ConnectButton({ fixed = true, className = "", fullWidthO
     save()
   }, [isConnected, address])
 
-  const responsiveStackClass = fullWidthOnMobile
-    ? "flex w-full flex-col gap-3 sm:flex-row sm:items-center"
-    : "flex items-center gap-2"
+  const responsiveStackClass = "flex w-full flex-col gap-3 sm:flex-row sm:items-center"
 
   const containerClass = cn(
     fixed
       ? "fixed bottom-4 right-4 z-50 flex flex-col gap-3 sm:flex-row sm:items-center"
       : "flex flex-col gap-3 sm:flex-row sm:items-center",
-    !fixed && fullWidthOnMobile && "w-full",
     className
   )
 
@@ -136,7 +132,7 @@ export default function ConnectButton({ fixed = true, className = "", fullWidthO
 
   const { needsSignup } = useProfile()
 
-  const primaryButtonClass = fullWidthOnMobile ? "w-full sm:w-auto justify-center" : undefined
+  const primaryButtonClass = "w-full sm:w-auto justify-center"
 
   return (
     <div className={containerClass}>
@@ -151,7 +147,7 @@ export default function ConnectButton({ fixed = true, className = "", fullWidthO
             {isConnecting || status === "pending" ? "Connecting..." : "Connect Wallet"}
           </Button>
         ) : (
-          <div className={cn("flex items-center gap-2", fullWidthOnMobile && "w-full justify-between sm:justify-start")}>
+          <div className={cn("flex w-full items-center gap-2 justify-between sm:justify-start")}>
             <span className="text-sm text-muted-foreground hidden md:inline">{short(address!)}</span>
             <Button variant="outline" size="sm" className={primaryButtonClass} onClick={() => disconnect()}>
               Disconnect
@@ -161,10 +157,7 @@ export default function ConnectButton({ fixed = true, className = "", fullWidthO
 
         {isConnected && chains.length > 0 && (
           <select
-            className={cn(
-              "text-sm bg-background border border-input rounded px-2 py-1",
-              fullWidthOnMobile && "w-full sm:w-auto"
-            )}
+            className="text-sm bg-background border border-input rounded px-2 py-1 w-auto"
             value={chainId}
             onChange={(e) => switchChain({ chainId: Number(e.target.value) })}
             disabled={isSwitching}
