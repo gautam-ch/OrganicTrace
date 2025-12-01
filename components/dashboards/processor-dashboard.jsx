@@ -176,7 +176,11 @@ export default function ProcessorDashboard({ user, profile }) {
   useEffect(() => {
     if (!eventMined || !eventTxHash) return
     setEventSuccess("Journey event recorded on-chain.")
-    setEventTxHash(undefined)
+    const timeout = setTimeout(() => {
+      setEventModal(null)
+      resetEventForm()
+    }, 1200)
+    return () => clearTimeout(timeout)
   }, [eventMined, eventTxHash])
 
   const resetEventForm = () => {
@@ -446,8 +450,11 @@ export default function ProcessorDashboard({ user, profile }) {
                       </Dialog>
 
                       <Dialog
+                        open={eventModal?.id === product.id}
                         onOpenChange={(open) => {
-                          if (!open && eventModal?.id === product.id) {
+                          if (open) {
+                            openEventModal(product)
+                          } else if (eventModal?.id === product.id) {
                             setEventModal(null)
                             resetEventForm()
                           }
@@ -496,7 +503,7 @@ export default function ProcessorDashboard({ user, profile }) {
                                 </div>
                                 <MediaUploader
                                   label="Journey Photos"
-                                  description="Upload up to 5 images. We'll pin them via Pinata automatically."
+                                  description="Upload up to 5 images."
                                   value={eventMedia}
                                   onChange={setEventMedia}
                                 />
